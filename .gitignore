@@ -1,0 +1,56 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs and editors
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Logs and temporary files
+*.log
+logs/
+cache/
+temp/
+tmp/
+
+# Node.js, React and Vite
+node_modules/
+**/dist/
+**/coverage/
+**/.vite/
+*.tsbuildinfo
+
+# Java and Gradle
+.gradle/
+**/build/
+out/
+*.class
+*.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+hs_err_pid*
+
+# Rust and Tauri
+**/target/
+
+# Generated Minecraft data
+worlds/
+exports/
+*.mca
+*.mcr
+
+# Generated packages and installers
+*.exe
+*.msi
+*.tar.gz
+*.zip
