@@ -7,10 +7,11 @@ Last reviewed: 2026-09-02
 | Tool | Version | Version source |
 |---|---:|---|
 | Ubuntu | 24.04 LTS | WSL distribution |
-| Java | Eclipse Temurin 21 LTS | Java toolchain configuration |
+| Java | Eclipse Temurin 21.0.12.1+1 LTS | `.sdkmanrc` and Java toolchain |
 | Spring Boot | 4.1.1 | Gradle plugin |
 | Gradle | 9.7.1 | Gradle Wrapper |
 | Node.js | 24.20.0 LTS | `.nvmrc` |
+| npm | 11.19.0 | Node.js distribution and npm lockfile |
 | Rust | 1.98.0 | `rust-toolchain.toml` |
 | Tauri | 2.x | `Cargo.lock` and npm lockfile |
 | React | Selected during desktop initialization | npm lockfile |
@@ -34,3 +35,10 @@ Spring Boot is reserved for future service components. The initial Java engine w
 - Node dependencies must be installed from the committed lockfile.
 - Rust dependencies must be resolved from the committed `Cargo.lock`.
 - Dependency upgrades require a separate commit and successful automated tests.
+
+## Local verification
+
+Run the repository verification script from the project root:
+
+```bash
+./scripts/verify-toolchain.sh
