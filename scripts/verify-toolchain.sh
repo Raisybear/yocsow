@@ -22,5 +22,6 @@ check_version "Node" "v24.20.0" "$(node --version)"
 check_version "npm" "11.19.0" "$(npm --version)"
 check_version "Rust" "rustc 1.98.0" "$(rustc --version)"
 check_version "Cargo" "cargo 1.98.0" "$(cargo --version)"
+check_version "Gradle" "Gradle 9.7.1" "$(./gradlew --version | grep '^Gradle ')"
 
 exit "$failure"
