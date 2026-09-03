@@ -28,6 +28,11 @@ jobs:
           # setup-java represents Temurin 21.0.12.1+1 using this SemVer form.
           java-version: '21.0.12+101.0.LTS'
 
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
