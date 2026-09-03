@@ -7,7 +7,9 @@
   ],
   "scripts": {
     "dev:desktop": "npm run dev --workspace=@yocsow/desktop",
+    "dev:desktop:native": "npm run tauri --workspace=@yocsow/desktop -- dev",
     "build:desktop": "npm run build --workspace=@yocsow/desktop",
+    "build:desktop:native": "npm run tauri --workspace=@yocsow/desktop -- build",
     "lint:desktop": "npm run lint --workspace=@yocsow/desktop",
     "test:desktop": "npm run test --workspace=@yocsow/desktop"
   },
