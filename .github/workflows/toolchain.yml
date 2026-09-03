@@ -46,3 +46,6 @@ jobs:
 
       - name: Verify versions
         run: ./scripts/verify-toolchain.sh
+
+      - name: Build and test Java modules
+        run: ./gradlew build
