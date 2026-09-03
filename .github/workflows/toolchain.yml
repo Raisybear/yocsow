@@ -54,6 +54,9 @@ jobs:
       - name: Lint frontend
         run: npm run lint:desktop
 
+      - name: Test frontend
+        run: npm run test:desktop
+
       - name: Build frontend
         run: npm run build:desktop
 
