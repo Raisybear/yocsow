@@ -37,15 +37,25 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
-          package-manager-cache: false
+          cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: rustfmt, clippy
 
-      - name: Verify versions
+      - name: Verify toolchain versions
         run: ./scripts/verify-toolchain.sh
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint:desktop
+
+      - name: Build frontend
+        run: npm run build:desktop
 
       - name: Build and test Java modules
         run: ./gradlew build
