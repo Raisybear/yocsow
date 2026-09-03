@@ -26,7 +26,30 @@ YOCSOW is a local-first desktop application for Minecraft: Java Edition. It aims
 
 ## Development
 
-The project is developed and tested on Windows and Linux through WSL2. Tool versions and setup instructions are documented under `docs/development`.
+The primary development environment is Ubuntu 24.04 LTS running through WSL2.
+
+- [Ubuntu and WSL setup](docs/development/ubuntu-setup.md)
+- [Pinned development toolchain](docs/development/toolchain.md)
+
+After installing the required system tools, prepare a new working copy with:
+
+```bash
+git clone git@github.com:Raisybear/yocsow.git
+cd yocsow
+./scripts/bootstrap-ubuntu.sh
+```
+
+Start the native desktop application:
+
+```bash
+npm run dev:desktop:native
+```
+
+Run all project checks before committing or pushing:
+
+```bash
+./scripts/verify.sh
+```
 
 ## License
 
