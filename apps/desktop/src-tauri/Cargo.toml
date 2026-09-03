@@ -1,0 +1,23 @@
+[package]
+name = "yocsow-desktop"
+version = "0.1.0"
+description = "Desktop application for creating custom Minecraft worlds"
+authors = ["Elias Spycher"]
+repository = "https://github.com/Raisybear/yocsow"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[lib]
+name = "yocsow_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+log = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-log = "2"

@@ -15,7 +15,7 @@ jobs:
   verify:
     name: Verify toolchain
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -45,6 +45,17 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev
+
       - name: Verify toolchain versions
         run: ./scripts/verify-toolchain.sh
 
@@ -62,3 +73,31 @@ jobs:
 
       - name: Build and test Java modules
         run: ./gradlew build
+
+      - name: Check Tauri Rust formatting
+        run: |
+          cargo fmt \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            -- \
+            --check
+
+      - name: Check Tauri application
+        run: |
+          cargo check \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --locked
+
+      - name: Lint Tauri Rust
+        run: |
+          cargo clippy \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --all-targets \
+            --locked \
+            -- \
+            -D warnings
+
+      - name: Test Tauri Rust
+        run: |
+          cargo test \
+            --manifest-path apps/desktop/src-tauri/Cargo.toml \
+            --locked
