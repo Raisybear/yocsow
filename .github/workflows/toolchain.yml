@@ -56,48 +56,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libxdo-dev
 
-      - name: Verify toolchain versions
-        run: ./scripts/verify-toolchain.sh
-
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Lint frontend
-        run: npm run lint:desktop
-
-      - name: Test frontend
-        run: npm run test:desktop
-
-      - name: Build frontend
-        run: npm run build:desktop
-
-      - name: Build and test Java modules
-        run: ./gradlew build
-
-      - name: Check Tauri Rust formatting
-        run: |
-          cargo fmt \
-            --manifest-path apps/desktop/src-tauri/Cargo.toml \
-            -- \
-            --check
-
-      - name: Check Tauri application
-        run: |
-          cargo check \
-            --manifest-path apps/desktop/src-tauri/Cargo.toml \
-            --locked
-
-      - name: Lint Tauri Rust
-        run: |
-          cargo clippy \
-            --manifest-path apps/desktop/src-tauri/Cargo.toml \
-            --all-targets \
-            --locked \
-            -- \
-            -D warnings
-
-      - name: Test Tauri Rust
-        run: |
-          cargo test \
-            --manifest-path apps/desktop/src-tauri/Cargo.toml \
-            --locked
+      - name: Run project verification
+        run: ./scripts/verify.sh
