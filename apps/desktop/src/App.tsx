@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { getAppInfo, type AppInfo } from './native/app-info'
 import './App.css'
 
 const components = [
@@ -6,7 +8,43 @@ const components = [
   { name: 'Engine', technology: 'Java 21' },
 ] as const
 
+type NativeBridgeState =
+  | { status: 'connecting' }
+  | { status: 'connected'; appInfo: AppInfo }
+  | { status: 'browser' }
+  | { status: 'unavailable' }
+
 function App() {
+  const [nativeBridge, setNativeBridge] = useState<NativeBridgeState>({
+    status: 'connecting',
+  })
+
+  useEffect(() => {
+    let active = true
+
+    void getAppInfo()
+      .then((appInfo) => {
+        if (!active) {
+          return
+        }
+
+        setNativeBridge(
+          appInfo === null
+            ? { status: 'browser' }
+            : { status: 'connected', appInfo },
+        )
+      })
+      .catch(() => {
+        if (active) {
+          setNativeBridge({ status: 'unavailable' })
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   return (
     <main className="app-shell">
       <section className="welcome-card" aria-labelledby="app-title">
@@ -27,9 +65,41 @@ function App() {
           ))}
         </dl>
 
-        <p className="status">
+        <p
+          className={`status status--${nativeBridge.status}`}
+          role="status"
+        >
           <span className="status-indicator" aria-hidden="true" />
-          Desktop foundation operational
+
+          {nativeBridge.status === 'connecting' && (
+            <span>Connecting to native bridge</span>
+          )}
+
+          {nativeBridge.status === 'connected' && (
+            <span>
+              Native bridge operational
+              <span className="status-details">
+                {' '}
+                — {nativeBridge.appInfo.platform} ·{' '}
+                {nativeBridge.appInfo.architecture} · v
+                {nativeBridge.appInfo.version}
+              </span>
+            </span>
+          )}
+
+          {nativeBridge.status === 'browser' && (
+            <span>
+              Browser preview active
+              <span className="status-details">
+                {' '}
+                — native commands require Tauri
+              </span>
+            </span>
+          )}
+
+          {nativeBridge.status === 'unavailable' && (
+            <span>Native bridge unavailable</span>
+          )}
         </p>
       </section>
     </main>
