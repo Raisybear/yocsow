@@ -1,4 +1,6 @@
+use crate::engine_process::{EngineState, EngineStatus};
 use serde::Serialize;
+use tauri::State;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +25,11 @@ impl AppInfo {
 #[tauri::command]
 pub fn get_app_info() -> AppInfo {
     AppInfo::current()
+}
+
+#[tauri::command]
+pub fn get_engine_status(state: State<'_, EngineState>) -> Result<EngineStatus, String> {
+    state.status().map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

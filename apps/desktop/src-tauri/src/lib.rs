@@ -1,8 +1,10 @@
 mod commands;
+mod engine_process;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(engine_process::EngineState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -13,7 +15,10 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![commands::get_app_info])
+        .invoke_handler(tauri::generate_handler![
+            commands::get_app_info,
+            commands::get_engine_status
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

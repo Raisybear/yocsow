@@ -7,6 +7,8 @@
   ],
   "scripts": {
     "dev:desktop": "npm run dev --workspace=@yocsow/desktop",
+    "prepare:engine-runner": "./gradlew :engine-runner:installDist",
+    "predev:desktop:native": "npm run prepare:engine-runner",
     "dev:desktop:native": "npm run tauri --workspace=@yocsow/desktop -- dev",
     "build:desktop": "npm run build --workspace=@yocsow/desktop",
     "build:desktop:native": "npm run tauri --workspace=@yocsow/desktop -- build",
