@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>YOCSOW</title>
+  <rect width="64" height="64" rx="14" fill="#0b1017"/>
+  <path
+    d="M14 16h10l8 13 8-13h10L37 37v11H27V37L14 16Z"
+    fill="#54d692"
+  />
+</svg>

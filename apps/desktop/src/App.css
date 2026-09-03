@@ -1,0 +1,101 @@
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem;
+}
+
+.welcome-card {
+  width: min(100%, 46rem);
+  padding: clamp(2rem, 6vw, 4rem);
+  border: 1px solid #2c3544;
+  border-radius: 1.5rem;
+  background: rgb(18 24 33 / 90%);
+  box-shadow: 0 2rem 6rem rgb(0 0 0 / 35%);
+}
+
+.eyebrow {
+  margin: 0 0 1rem;
+  color: #78dba9;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+
+h1 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: clamp(2.5rem, 8vw, 5rem);
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.introduction {
+  max-width: 34rem;
+  margin: 1.5rem 0 2.5rem;
+  color: #aeb8c7;
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+.component-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin: 0;
+  border: 1px solid #303a49;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.component {
+  padding: 1rem;
+  background: #151c26;
+}
+
+.component + .component {
+  border-left: 1px solid #303a49;
+}
+
+.component dt {
+  color: #7f8b9d;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.component dd {
+  margin: 0.35rem 0 0;
+  color: #e7ebf1;
+  font-weight: 600;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 2rem 0 0;
+  color: #aeb8c7;
+  font-size: 0.9rem;
+}
+
+.status-indicator {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+  background: #54d692;
+  box-shadow: 0 0 1rem rgb(84 214 146 / 70%);
+}
+
+@media (max-width: 36rem) {
+  .component-list {
+    grid-template-columns: 1fr;
+  }
+
+  .component + .component {
+    border-top: 1px solid #303a49;
+    border-left: 0;
+  }
+}
