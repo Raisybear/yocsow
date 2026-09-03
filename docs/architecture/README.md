@@ -24,10 +24,16 @@ YOCSOW follows these initial principles:
 
 - The desktop UI must not contain Minecraft world-generation logic.
 - The Java engine must not depend on a graphical user interface.
-- Communication between the desktop runtime and engine must use a documented, versioned contract.
+- The React UI communicates with native components only through Tauri commands.
+- The Rust runtime owns native permissions and external process lifecycles.
+- Communication with the Java engine uses a documented, versioned contract.
 - Generated worlds, caches and exports remain outside version control.
 - Online services are optional and must not be required for local projects.
 
 ## Architecture decisions
 
-Significant technical decisions will be recorded as Architecture Decision Records under `docs/architecture/decisions`.
+Significant technical decisions are recorded as Architecture Decision Records.
+
+| Decision | Status | Summary |
+|---|---|---|
+| [ADR 0001](decisions/0001-java-engine-process-boundary.md) | Accepted | Run the Java engine as a managed process using JSON-RPC 2.0 over standard streams |
