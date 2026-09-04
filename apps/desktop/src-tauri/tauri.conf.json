@@ -20,6 +20,12 @@
         "minHeight": 640,
         "center": true,
         "resizable": true,
+        "minimizable": true,
+        "maximizable": true,
+        "closable": true,
+        "decorations": true,
+        "transparent": false,
+        "backgroundColor": "#0b1017",
         "fullscreen": false
       }
     ],
@@ -47,9 +53,6 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ],
-    "android": {
-      "debugApplicationIdSuffix": ".debug"
-    }
+    ]
   }
 }
