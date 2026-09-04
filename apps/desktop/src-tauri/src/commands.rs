@@ -1,4 +1,4 @@
-use crate::engine_process::{EngineState, EngineStatus};
+use crate::engine_process::{EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult};
 use serde::Serialize;
 use tauri::State;
 
@@ -30,6 +30,21 @@ pub fn get_app_info() -> AppInfo {
 #[tauri::command]
 pub fn get_engine_status(state: State<'_, EngineState>) -> Result<EngineStatus, String> {
     state.status().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn seed_range_contains(
+    state: State<'_, EngineState>,
+    minimum: String,
+    maximum: String,
+    seed: String,
+) -> Result<SeedRangeResult, String> {
+    let query =
+        SeedRangeQuery::parse(&minimum, &maximum, &seed).map_err(|error| error.to_string())?;
+
+    state
+        .seed_range_contains(query)
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

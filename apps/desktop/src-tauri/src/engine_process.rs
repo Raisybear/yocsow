@@ -12,6 +12,7 @@ use std::sync::Mutex;
 const JSON_RPC_VERSION: &str = "2.0";
 const PROTOCOL_VERSION: u32 = 1;
 const ENGINE_RUNNER_ENVIRONMENT_VARIABLE: &str = "YOCSOW_ENGINE_RUNNER";
+const REQUIRED_CAPABILITIES: [&str; 2] = ["engine.health", "seed.range.contains"];
 
 pub struct EngineState {
     process: Mutex<Option<EngineProcess>>,
@@ -27,6 +28,20 @@ impl Default for EngineState {
 
 impl EngineState {
     pub(crate) fn status(&self) -> Result<EngineStatus, EngineProcessError> {
+        self.with_process(EngineProcess::health)
+    }
+
+    pub(crate) fn seed_range_contains(
+        &self,
+        query: SeedRangeQuery,
+    ) -> Result<SeedRangeResult, EngineProcessError> {
+        self.with_process(|process| process.seed_range_contains(query))
+    }
+
+    fn with_process<T>(
+        &self,
+        operation: impl FnOnce(&mut EngineProcess) -> Result<T, EngineProcessError>,
+    ) -> Result<T, EngineProcessError> {
         let mut process = self
             .process
             .lock()
@@ -39,16 +54,22 @@ impl EngineState {
             *process = Some(started_process);
         }
 
-        let health = process
-            .as_mut()
-            .ok_or_else(|| EngineProcessError::State("engine process is unavailable".into()))?
-            .health();
+        let result = {
+            let active_process = process
+                .as_mut()
+                .ok_or_else(|| EngineProcessError::State("engine process is unavailable".into()))?;
 
-        if health.is_err() {
+            operation(active_process)
+        };
+
+        if result
+            .as_ref()
+            .is_err_and(|error| error.invalidates_process())
+        {
             *process = None;
         }
 
-        health
+        result
     }
 }
 
@@ -59,6 +80,39 @@ pub struct EngineStatus {
     initialized: bool,
     protocol_version: u32,
     engine_version: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SeedRangeQuery {
+    minimum: i64,
+    maximum: i64,
+    seed: i64,
+}
+
+impl SeedRangeQuery {
+    pub(crate) fn parse(
+        minimum: &str,
+        maximum: &str,
+        seed: &str,
+    ) -> Result<Self, EngineProcessError> {
+        Ok(Self {
+            minimum: parse_signed_64_bit_integer("minimum", minimum)?,
+            maximum: parse_signed_64_bit_integer("maximum", maximum)?,
+            seed: parse_signed_64_bit_integer("seed", seed)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SeedRangeResult {
+    contains: bool,
+}
+
+fn parse_signed_64_bit_integer(parameter: &str, value: &str) -> Result<i64, EngineProcessError> {
+    value.trim().parse::<i64>().map_err(|_| {
+        EngineProcessError::Input(format!("{parameter} must be a signed 64-bit integer"))
+    })
 }
 
 struct EngineProcess {
@@ -117,14 +171,16 @@ impl EngineProcess {
             ));
         }
 
-        if !result
-            .capabilities
-            .iter()
-            .any(|capability| capability == "engine.health")
-        {
-            return Err(EngineProcessError::Protocol(
-                "engine does not advertise the engine.health capability".into(),
-            ));
+        for required_capability in REQUIRED_CAPABILITIES {
+            if !result
+                .capabilities
+                .iter()
+                .any(|capability| capability == required_capability)
+            {
+                return Err(EngineProcessError::Protocol(format!(
+                    "engine does not advertise the {required_capability} capability"
+                )));
+            }
         }
 
         Ok(())
@@ -160,6 +216,20 @@ impl EngineProcess {
         }
 
         Ok(status)
+    }
+
+    fn seed_range_contains(
+        &mut self,
+        query: SeedRangeQuery,
+    ) -> Result<SeedRangeResult, EngineProcessError> {
+        self.client.call(
+            "seed.range.contains",
+            Some(json!({
+                "minimum": query.minimum,
+                "maximum": query.maximum,
+                "seed": query.seed
+            })),
+        )
     }
 }
 
@@ -281,9 +351,16 @@ pub(crate) enum EngineProcessError {
     Io(std::io::Error),
     Json(serde_json::Error),
     Configuration(String),
+    Input(String),
     Protocol(String),
     Remote { code: i64, message: String },
     State(String),
+}
+
+impl EngineProcessError {
+    fn invalidates_process(&self) -> bool {
+        matches!(self, Self::Io(_) | Self::Json(_) | Self::Protocol(_))
+    }
 }
 
 impl Display for EngineProcessError {
@@ -294,6 +371,7 @@ impl Display for EngineProcessError {
             Self::Configuration(message) => {
                 write!(formatter, "engine configuration error: {message}")
             }
+            Self::Input(message) => write!(formatter, "invalid engine query: {message}"),
             Self::Protocol(message) => write!(formatter, "engine protocol error: {message}"),
             Self::Remote { code, message } => {
                 write!(formatter, "engine returned error {code}: {message}")
@@ -346,7 +424,10 @@ fn engine_runner_path() -> Result<PathBuf, EngineProcessError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{EngineProcessError, EngineStatus, JSON_RPC_VERSION, JsonRpcClient};
+    use super::{
+        EngineProcessError, EngineStatus, JSON_RPC_VERSION, JsonRpcClient, SeedRangeQuery,
+        SeedRangeResult,
+    };
     use serde_json::{Value, json};
     use std::io::{BufReader, Cursor};
 
@@ -408,6 +489,70 @@ mod tests {
             serde_json::from_str(written_request.trim()).expect("request should be valid JSON");
 
         assert_eq!(request["params"]["protocolVersion"], 1);
+    }
+
+    #[test]
+    fn client_writes_seed_range_query_and_reads_result() {
+        let response = concat!(
+            r#"{"jsonrpc":"2.0","id":1,"result":{"contains":true}}"#,
+            "\n"
+        );
+
+        let reader = BufReader::new(Cursor::new(response.as_bytes()));
+        let writer = Vec::new();
+        let mut client = JsonRpcClient::new(reader, writer);
+        let query =
+            SeedRangeQuery::parse("-10", "10", "0").expect("seed range query should be valid");
+
+        let result: SeedRangeResult = client
+            .call(
+                "seed.range.contains",
+                Some(json!({
+                    "minimum": query.minimum,
+                    "maximum": query.maximum,
+                    "seed": query.seed
+                })),
+            )
+            .expect("seed range response should succeed");
+
+        assert!(result.contains);
+
+        let written_request =
+            String::from_utf8(client.writer).expect("request should contain UTF-8");
+        let request: Value =
+            serde_json::from_str(written_request.trim()).expect("request should be valid JSON");
+
+        assert_eq!(request["method"], "seed.range.contains");
+        assert_eq!(request["params"]["minimum"], -10);
+        assert_eq!(request["params"]["maximum"], 10);
+        assert_eq!(request["params"]["seed"], 0);
+    }
+
+    #[test]
+    fn seed_range_query_accepts_full_signed_64_bit_values() {
+        let query = SeedRangeQuery::parse(
+            "-9223372036854775808",
+            "9223372036854775807",
+            "9223372036854775807",
+        )
+        .expect("signed 64-bit values should be accepted");
+
+        assert_eq!(query.minimum, i64::MIN);
+        assert_eq!(query.maximum, i64::MAX);
+        assert_eq!(query.seed, i64::MAX);
+    }
+
+    #[test]
+    fn seed_range_query_rejects_values_outside_signed_64_bit_range() {
+        let error = SeedRangeQuery::parse("0", "9223372036854775808", "1")
+            .expect_err("out-of-range values should be rejected");
+
+        match error {
+            EngineProcessError::Input(message) => {
+                assert_eq!(message, "maximum must be a signed 64-bit integer");
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]
