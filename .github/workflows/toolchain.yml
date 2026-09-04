@@ -61,3 +61,81 @@ jobs:
 
       - name: Run project verification
         run: ./scripts/verify.sh
+
+  verify-windows:
+    name: Verify Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21.0.12+101.0.LTS'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: rustfmt, clippy
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Prepare Java engine runner
+        run: npm run prepare:engine-runner
+
+      - name: Lint desktop frontend
+        run: npm run lint:desktop
+
+      - name: Test desktop frontend
+        run: npm run test:desktop
+
+      - name: Build desktop frontend
+        run: npm run build:desktop
+
+      - name: Build and test Java modules
+        run: .\gradlew.bat build
+
+      - name: Check Tauri Rust formatting
+        run: >
+          cargo fmt
+          --manifest-path apps/desktop/src-tauri/Cargo.toml
+          --
+          --check
+
+      - name: Check Tauri application
+        run: >
+          cargo check
+          --manifest-path apps/desktop/src-tauri/Cargo.toml
+          --locked
+
+      - name: Lint Tauri Rust
+        run: >
+          cargo clippy
+          --manifest-path apps/desktop/src-tauri/Cargo.toml
+          --all-targets
+          --locked
+          --
+          -D warnings
+
+      - name: Test Tauri Rust
+        run: >
+          cargo test
+          --manifest-path apps/desktop/src-tauri/Cargo.toml
+          --locked
