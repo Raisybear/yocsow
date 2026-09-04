@@ -1,5 +1,7 @@
 use crate::engine_process::{EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult};
+use crate::project_files::{self, ProjectDocument};
 use serde::Serialize;
+use std::path::Path;
 use tauri::State;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -45,6 +47,16 @@ pub fn seed_range_contains(
     state
         .seed_range_contains(query)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn load_project(path: String) -> Result<ProjectDocument, String> {
+    project_files::load_project(Path::new(&path)).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn save_project(path: String, project: ProjectDocument) -> Result<(), String> {
+    project_files::save_project(Path::new(&path), &project).map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
