@@ -40,9 +40,72 @@ class JsonRpcServerTest {
     assertEquals(1, responses.get(1).at("/result/protocolVersion").intValue());
     assertEquals("0.1.0-SNAPSHOT", responses.get(1).at("/result/engineVersion").stringValue());
     assertEquals("engine.health", responses.get(1).at("/result/capabilities/0").stringValue());
+    assertEquals(
+        "seed.range.contains", responses.get(1).at("/result/capabilities/1").stringValue());
 
     assertEquals(3, responses.get(2).get("id").intValue());
     assertTrue(responses.get(2).at("/result/initialized").booleanValue());
+  }
+
+  @Test
+  void checksWhetherSeedsAreWithinAnInclusiveRange() throws IOException {
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":2,"method":"seed.range.contains","params":{"minimum":-10,"maximum":10,"seed":-10}}
+        {"jsonrpc":"2.0","id":3,"method":"seed.range.contains","params":{"minimum":-10,"maximum":10,"seed":0}}
+        {"jsonrpc":"2.0","id":4,"method":"seed.range.contains","params":{"minimum":-10,"maximum":10,"seed":10}}
+        {"jsonrpc":"2.0","id":5,"method":"seed.range.contains","params":{"minimum":-10,"maximum":10,"seed":11}}
+        """;
+
+    List<JsonNode> responses = serve(input);
+
+    assertEquals(5, responses.size());
+    assertTrue(responses.get(1).at("/result/contains").booleanValue());
+    assertTrue(responses.get(2).at("/result/contains").booleanValue());
+    assertTrue(responses.get(3).at("/result/contains").booleanValue());
+    assertFalse(responses.get(4).at("/result/contains").booleanValue());
+  }
+
+  @Test
+  void requiresInitializationBeforeSeedQueries() throws IOException {
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"seed.range.contains","params":{"minimum":0,"maximum":10,"seed":5}}
+        """;
+
+    List<JsonNode> responses = serve(input);
+
+    assertEquals(1, responses.size());
+    assertEquals(-32002, responses.getFirst().at("/error/code").intValue());
+    assertEquals("Engine not initialized", responses.getFirst().at("/error/message").stringValue());
+  }
+
+  @Test
+  void rejectsInvalidSeedRangeParameters() throws IOException {
+    String input =
+        """
+        {"jsonrpc":"2.0","id":0,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":1,"method":"seed.range.contains"}
+        {"jsonrpc":"2.0","id":2,"method":"seed.range.contains","params":{"minimum":0,"maximum":10}}
+        {"jsonrpc":"2.0","id":3,"method":"seed.range.contains","params":{"minimum":0,"maximum":10,"seed":"5"}}
+        {"jsonrpc":"2.0","id":4,"method":"seed.range.contains","params":{"minimum":0,"maximum":10,"seed":5,"extra":true}}
+        {"jsonrpc":"2.0","id":5,"method":"seed.range.contains","params":{"minimum":10,"maximum":0,"seed":5}}
+        {"jsonrpc":"2.0","id":6,"method":"seed.range.contains","params":{"minimum":0,"maximum":10,"seed":9223372036854775808}}
+        """;
+
+    List<JsonNode> responses = serve(input);
+
+    assertEquals(7, responses.size());
+
+    for (int index = 1; index < responses.size(); index++) {
+      assertEquals(index, responses.get(index).get("id").intValue());
+      assertEquals(-32602, responses.get(index).at("/error/code").intValue());
+    }
+
+    assertEquals(
+        "minimum must not be greater than maximum",
+        responses.get(5).at("/error/message").stringValue());
   }
 
   @Test
