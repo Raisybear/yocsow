@@ -1,8 +1,10 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { getAppInfo } from './native/app-info'
 import { getEngineStatus } from './native/engine-status'
+import { seedRangeContains } from './native/seed-range'
 
 vi.mock('./native/app-info', () => ({
   getAppInfo: vi.fn(),
@@ -12,16 +14,23 @@ vi.mock('./native/engine-status', () => ({
   getEngineStatus: vi.fn(),
 }))
 
+vi.mock('./native/seed-range', () => ({
+  seedRangeContains: vi.fn(),
+}))
+
 const getAppInfoMock = vi.mocked(getAppInfo)
 const getEngineStatusMock = vi.mocked(getEngineStatus)
+const seedRangeContainsMock = vi.mocked(seedRangeContains)
 
 describe('App', () => {
   beforeEach(() => {
     getAppInfoMock.mockReset()
     getEngineStatusMock.mockReset()
+    seedRangeContainsMock.mockReset()
 
     getAppInfoMock.mockReturnValue(new Promise(() => {}))
     getEngineStatusMock.mockReturnValue(new Promise(() => {}))
+    seedRangeContainsMock.mockReturnValue(new Promise(() => {}))
   })
 
   it('renders the application identity', () => {
@@ -122,6 +131,109 @@ describe('App', () => {
 
     expect(
       await screen.findByText('Java engine unavailable'),
+    ).toBeInTheDocument()
+  })
+
+  it('submits the full signed 64-bit seed range unchanged', async () => {
+    const user = userEvent.setup()
+
+    seedRangeContainsMock.mockResolvedValue({
+      contains: true,
+    })
+
+    render(<App />)
+
+    const minimum = screen.getByLabelText('Minimum')
+    const maximum = screen.getByLabelText('Maximum')
+    const seed = screen.getByLabelText('Seed')
+
+    await user.clear(minimum)
+    await user.type(minimum, '-9223372036854775808')
+
+    await user.clear(maximum)
+    await user.type(maximum, '9223372036854775807')
+
+    await user.clear(seed)
+    await user.type(seed, '9223372036854775807')
+
+    await user.click(
+      screen.getByRole('button', { name: 'Check seed' }),
+    )
+
+    expect(seedRangeContainsMock).toHaveBeenCalledWith({
+      minimum: '-9223372036854775808',
+      maximum: '9223372036854775807',
+      seed: '9223372036854775807',
+    })
+
+    expect(
+      await screen.findByText('Seed is inside the selected range.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows when a seed is outside the selected range', async () => {
+    const user = userEvent.setup()
+
+    seedRangeContainsMock.mockResolvedValue({
+      contains: false,
+    })
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Check seed' }),
+    )
+
+    expect(seedRangeContainsMock).toHaveBeenCalledWith({
+      minimum: '-10',
+      maximum: '10',
+      seed: '0',
+    })
+
+    expect(
+      await screen.findByText(
+        'Seed is outside the selected range.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('explains that seed queries require Tauri in browser previews', async () => {
+    const user = userEvent.setup()
+
+    seedRangeContainsMock.mockResolvedValue(null)
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Check seed' }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Seed queries require the native Tauri application.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows errors returned by the native seed query', async () => {
+    const user = userEvent.setup()
+
+    seedRangeContainsMock.mockRejectedValue(
+      new Error(
+        'minimum must not be greater than maximum',
+      ),
+    )
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Check seed' }),
+    )
+
+    expect(
+      await screen.findByText(
+        'Seed query failed: minimum must not be greater than maximum',
+      ),
     ).toBeInTheDocument()
   })
 })
