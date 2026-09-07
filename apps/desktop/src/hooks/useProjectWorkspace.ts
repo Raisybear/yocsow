@@ -33,6 +33,9 @@ export interface ProjectWorkspaceController {
     field: keyof ProjectDocument['seedRange'],
     value: string,
   ) => void
+  updateSearchRequirements: (
+    requirements: ProjectDocument['searchRequirements'],
+  ) => void
 }
 
 function createProject(): ProjectDocument {
@@ -207,6 +210,17 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     markProjectChanged()
   }
 
+  function updateSearchRequirements(
+    requirements: ProjectDocument['searchRequirements'],
+  ): void {
+    setProject((currentProject) => ({
+      ...currentProject,
+      searchRequirements: requirements,
+    }))
+
+    markProjectChanged()
+  }
+
   return {
     project,
     projectPath,
@@ -219,5 +233,6 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     saveProjectAs,
     updateProjectName,
     updateSeedRange,
+    updateSearchRequirements,
   }
 }
