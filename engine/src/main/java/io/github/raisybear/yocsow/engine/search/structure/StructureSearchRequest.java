@@ -1,17 +1,15 @@
-package io.github.raisybear.yocsow.engine.search;
+package io.github.raisybear.yocsow.engine.search.structure;
 
+import io.github.raisybear.yocsow.engine.search.MinecraftVersion;
+import io.github.raisybear.yocsow.engine.search.StructureRequirement;
 import java.util.Objects;
 
-public record VillageSearchRequest(
+public record StructureSearchRequest(
     long seed, MinecraftVersion minecraftVersion, StructureRequirement requirement) {
 
-  public VillageSearchRequest {
+  public StructureSearchRequest {
     minecraftVersion = Objects.requireNonNull(minecraftVersion, "minecraftVersion");
 
     requirement = Objects.requireNonNull(requirement, "requirement");
-
-    if (requirement.structureType() != StructureType.VILLAGE) {
-      throw new IllegalArgumentException("requirement must target a village");
-    }
   }
 }
