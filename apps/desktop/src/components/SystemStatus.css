@@ -1,0 +1,43 @@
+.status-list {
+  display: grid;
+  gap: 0.8rem;
+  margin: 2rem 0 0;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  color: #aeb8c7;
+  font-size: 0.9rem;
+}
+
+.status-indicator {
+  width: 0.65rem;
+  height: 0.65rem;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #7f8b9d;
+  box-shadow: 0 0 1rem rgb(127 139 157 / 45%);
+}
+
+.status--connected .status-indicator {
+  background: #54d692;
+  box-shadow: 0 0 1rem rgb(84 214 146 / 70%);
+}
+
+.status--browser .status-indicator {
+  background: #64a8ff;
+  box-shadow: 0 0 1rem rgb(100 168 255 / 60%);
+}
+
+.status--unavailable .status-indicator {
+  background: #ff6b6b;
+  box-shadow: 0 0 1rem rgb(255 107 107 / 60%);
+}
+
+.status-details {
+  color: #7f8b9d;
+  font-size: 0.8rem;
+}
