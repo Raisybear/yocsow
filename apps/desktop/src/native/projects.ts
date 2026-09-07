@@ -1,13 +1,15 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
+import type { SearchRequirement } from '../domain/search-requirements'
 import type { SeedRangeQuery } from './seed-range'
 
-export const PROJECT_FORMAT_VERSION = 1
+export const PROJECT_FORMAT_VERSION = 2
 
 export interface ProjectDocument {
   formatVersion: number
   name: string
   seedRange: SeedRangeQuery
+  searchRequirements: SearchRequirement[]
 }
 
 export interface OpenedProject {

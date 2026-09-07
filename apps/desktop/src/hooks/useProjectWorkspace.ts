@@ -44,6 +44,7 @@ function createProject(): ProjectDocument {
       maximum: '10',
       seed: '0',
     },
+    searchRequirements: [],
   }
 }
 

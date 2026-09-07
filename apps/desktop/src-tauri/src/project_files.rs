@@ -1,13 +1,19 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::fs;
 use std::path::Path;
 
-const PROJECT_FORMAT_VERSION: u32 = 1;
+const LEGACY_PROJECT_FORMAT_VERSION: u32 = 1;
+const PROJECT_FORMAT_VERSION: u32 = 2;
 const PROJECT_EXTENSION: &str = "yocsow";
 const MAX_PROJECT_FILE_SIZE: usize = 1024 * 1024;
 const MAX_PROJECT_NAME_LENGTH: usize = 120;
+const MAX_SEARCH_REQUIREMENTS: usize = 64;
+const MAX_REQUIREMENT_ID_LENGTH: usize = 120;
+const MAX_SEARCH_RADIUS_BLOCKS: u64 = 60_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -15,6 +21,7 @@ pub struct ProjectDocument {
     format_version: u32,
     name: String,
     seed_range: ProjectSeedRange,
+    search_requirements: Vec<ProjectSearchRequirement>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +30,54 @@ pub struct ProjectSeedRange {
     minimum: String,
     maximum: String,
     seed: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum ProjectSearchRequirement {
+    #[serde(rename = "structure")]
+    Structure {
+        id: String,
+        #[serde(rename = "structureType")]
+        structure_type: ProjectStructureType,
+        center: ProjectBlockPosition,
+        #[serde(rename = "radiusBlocks")]
+        radius_blocks: u64,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectStructureType {
+    Village,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ProjectBlockPosition {
+    x: i64,
+    z: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct LegacyProjectDocument {
+    format_version: u32,
+    name: String,
+    seed_range: ProjectSeedRange,
+}
+
+impl LegacyProjectDocument {
+    fn migrate(self) -> ProjectDocument {
+        debug_assert_eq!(self.format_version, LEGACY_PROJECT_FORMAT_VERSION);
+
+        ProjectDocument {
+            format_version: PROJECT_FORMAT_VERSION,
+            name: self.name,
+            seed_range: self.seed_range,
+            search_requirements: Vec::new(),
+        }
+    }
 }
 
 impl ProjectDocument {
@@ -58,6 +113,54 @@ impl ProjectDocument {
             ));
         }
 
+        if self.search_requirements.len() > MAX_SEARCH_REQUIREMENTS {
+            return Err(ProjectFileError::Validation(format!(
+                "project must not contain more than {MAX_SEARCH_REQUIREMENTS} search requirements"
+            )));
+        }
+
+        let mut requirement_ids = HashSet::new();
+
+        for requirement in &self.search_requirements {
+            match requirement {
+                ProjectSearchRequirement::Structure {
+                    id, radius_blocks, ..
+                } => {
+                    let trimmed_id = id.trim();
+
+                    if trimmed_id.is_empty() {
+                        return Err(ProjectFileError::Validation(
+                            "search requirement ID must not be empty".into(),
+                        ));
+                    }
+
+                    if trimmed_id.chars().count() > MAX_REQUIREMENT_ID_LENGTH {
+                        return Err(ProjectFileError::Validation(format!(
+                            "search requirement ID must not exceed {MAX_REQUIREMENT_ID_LENGTH} characters"
+                        )));
+                    }
+
+                    if trimmed_id != id {
+                        return Err(ProjectFileError::Validation(
+                            "search requirement ID must not contain surrounding whitespace".into(),
+                        ));
+                    }
+
+                    if !requirement_ids.insert(id) {
+                        return Err(ProjectFileError::Validation(format!(
+                            "duplicate search requirement ID: {id}"
+                        )));
+                    }
+
+                    if *radius_blocks == 0 || *radius_blocks > MAX_SEARCH_RADIUS_BLOCKS {
+                        return Err(ProjectFileError::Validation(format!(
+                            "search radius must be between 1 and {MAX_SEARCH_RADIUS_BLOCKS} blocks"
+                        )));
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -80,7 +183,29 @@ pub(crate) fn load_project(path: &Path) -> Result<ProjectDocument, ProjectFileEr
     }
 
     let contents = fs::read_to_string(path)?;
-    let project: ProjectDocument = serde_json::from_str(&contents)?;
+    let value: Value = serde_json::from_str(&contents)?;
+    let format_version = value
+        .get("formatVersion")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| {
+            ProjectFileError::Validation(
+                "project format version must be a non-negative integer".into(),
+            )
+        })?;
+
+    let project = match format_version {
+        version if version == u64::from(LEGACY_PROJECT_FORMAT_VERSION) => {
+            let legacy_project: LegacyProjectDocument = serde_json::from_value(value)?;
+            legacy_project.migrate()
+        }
+        version if version == u64::from(PROJECT_FORMAT_VERSION) => serde_json::from_value(value)?,
+        unsupported_version => {
+            return Err(ProjectFileError::Validation(format!(
+                "unsupported project format version {unsupported_version}; expected {PROJECT_FORMAT_VERSION}"
+            )));
+        }
+    };
+
     project.validate()?;
 
     Ok(project)
@@ -168,7 +293,9 @@ impl From<serde_json::Error> for ProjectFileError {
 #[cfg(test)]
 mod tests {
     use super::{
-        PROJECT_FORMAT_VERSION, ProjectDocument, ProjectSeedRange, load_project, save_project,
+        LEGACY_PROJECT_FORMAT_VERSION, PROJECT_FORMAT_VERSION, ProjectBlockPosition,
+        ProjectDocument, ProjectSearchRequirement, ProjectSeedRange, ProjectStructureType,
+        load_project, save_project,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -187,8 +314,57 @@ mod tests {
         let loaded = load_project(&path).expect("project should be loaded");
 
         assert!(contents.ends_with('\n'));
-        assert!(contents.contains(r#""formatVersion": 1"#));
+        assert!(contents.contains(r#""formatVersion": 2"#));
+        assert!(contents.contains(r#""searchRequirements": []"#));
         assert_eq!(loaded, project);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn saves_and_loads_search_requirements() {
+        let path = test_path("village-search.yocsow");
+        let mut project = sample_project();
+        project.search_requirements.push(sample_requirement());
+
+        save_project(&path, &project).expect("project should be saved");
+
+        let contents = fs::read_to_string(&path).expect("saved project should be readable");
+        let loaded = load_project(&path).expect("project should be loaded");
+
+        assert!(contents.contains(r#""kind": "structure""#));
+        assert!(contents.contains(r#""structureType": "village""#));
+        assert!(contents.contains(r#""radiusBlocks": 1000"#));
+        assert_eq!(loaded, project);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn migrates_version_one_projects() {
+        let path = test_path("legacy.yocsow");
+
+        fs::write(
+            &path,
+            format!(
+                r#"{{
+                  "formatVersion": {LEGACY_PROJECT_FORMAT_VERSION},
+                  "name": "Legacy world",
+                  "seedRange": {{
+                    "minimum": "-10",
+                    "maximum": "10",
+                    "seed": "0"
+                  }}
+                }}"#
+            ),
+        )
+        .expect("legacy project should be written");
+
+        let migrated = load_project(&path).expect("legacy project should be migrated");
+
+        assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.name, "Legacy world");
+        assert!(migrated.search_requirements.is_empty());
 
         remove_test_directory(&path);
     }
@@ -231,6 +407,44 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_search_radii() {
+        let path = test_path("invalid-radius.yocsow");
+        let mut project = sample_project();
+        let mut requirement = sample_requirement();
+
+        let ProjectSearchRequirement::Structure { radius_blocks, .. } = &mut requirement;
+        *radius_blocks = 0;
+
+        project.search_requirements.push(requirement);
+
+        let error =
+            save_project(&path, &project).expect_err("invalid search radii should be rejected");
+
+        assert!(error.to_string().contains("search radius must be between"));
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn rejects_duplicate_search_requirement_identifiers() {
+        let path = test_path("duplicate-requirements.yocsow");
+        let mut project = sample_project();
+        project.search_requirements.push(sample_requirement());
+        project.search_requirements.push(sample_requirement());
+
+        let error = save_project(&path, &project)
+            .expect_err("duplicate requirement IDs should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("duplicate search requirement ID")
+        );
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
     fn rejects_files_with_the_wrong_extension() {
         let path = test_path("world.json");
 
@@ -249,13 +463,14 @@ mod tests {
         fs::write(
             &path,
             r#"{
-              "formatVersion": 1,
+              "formatVersion": 2,
               "name": "Unknown field",
               "seedRange": {
                 "minimum": "-10",
                 "maximum": "10",
                 "seed": "0"
               },
+              "searchRequirements": [],
               "unexpected": true
             }"#,
         )
@@ -277,6 +492,16 @@ mod tests {
                 maximum: "10".into(),
                 seed: "0".into(),
             },
+            search_requirements: Vec::new(),
+        }
+    }
+
+    fn sample_requirement() -> ProjectSearchRequirement {
+        ProjectSearchRequirement::Structure {
+            id: "village-1".into(),
+            structure_type: ProjectStructureType::Village,
+            center: ProjectBlockPosition { x: 120, z: -340 },
+            radius_blocks: 1_000,
         }
     }
 

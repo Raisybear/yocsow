@@ -11,7 +11,7 @@ import { ProjectWorkspace } from './ProjectWorkspace'
 import { SeedRangePanel } from './SeedRangePanel'
 
 vi.mock('../native/projects', () => ({
-  PROJECT_FORMAT_VERSION: 1,
+  PROJECT_FORMAT_VERSION: 2,
   openLocalProject: vi.fn(),
   saveLocalProject: vi.fn(),
   selectProjectSavePath: vi.fn(),
@@ -86,13 +86,14 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Loaded world.yocsow',
         project: {
-          formatVersion: 1,
+          formatVersion: 2,
           name: 'Loaded world',
           seedRange: {
             minimum: '-100',
             maximum: '100',
             seed: '42',
           },
+          searchRequirements: [],
         },
       },
     })
@@ -145,13 +146,14 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Survival world.yocsow',
       {
-        formatVersion: 1,
+        formatVersion: 2,
         name: 'Survival world',
         seedRange: {
           minimum: '-10',
           maximum: '10',
           seed: '0',
         },
+        searchRequirements: [],
       },
     )
 
@@ -174,13 +176,14 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Existing.yocsow',
         project: {
-          formatVersion: 1,
+          formatVersion: 2,
           name: 'Existing',
           seedRange: {
             minimum: '0',
             maximum: '100',
             seed: '50',
           },
+          searchRequirements: [],
         },
       },
     })
@@ -209,13 +212,14 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Existing.yocsow',
       {
-        formatVersion: 1,
+        formatVersion: 2,
         name: 'Existing',
         seedRange: {
           minimum: '0',
           maximum: '100',
           seed: '75',
         },
+        searchRequirements: [],
       },
     )
 
@@ -232,13 +236,14 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Original.yocsow',
         project: {
-          formatVersion: 1,
+          formatVersion: 2,
           name: 'Original',
           seedRange: {
             minimum: '-10',
             maximum: '10',
             seed: '0',
           },
+          searchRequirements: [],
         },
       },
     })
@@ -265,13 +270,14 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Copy.yocsow',
       {
-        formatVersion: 1,
+        formatVersion: 2,
         name: 'Original',
         seedRange: {
           minimum: '-10',
           maximum: '10',
           seed: '0',
         },
+        searchRequirements: [],
       },
     )
 
