@@ -1,0 +1,161 @@
+.search-requirements-panel {
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid #303a49;
+  border-radius: 0.9rem;
+  background: #111821;
+}
+
+.search-requirements-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.search-requirements-heading h2 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: 1.3rem;
+}
+
+.search-requirements-description {
+  margin: 0;
+  color: #7f8b9d;
+  font-size: 0.85rem;
+}
+
+.search-requirement-add {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  margin-top: 1.25rem;
+}
+
+.search-requirement-add label,
+.search-requirement-field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.search-requirement-add span,
+.search-requirement-field span {
+  color: #aeb8c7;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.search-requirement-add select,
+.search-requirement-field input {
+  min-height: 2.75rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid #303a49;
+  border-radius: 0.55rem;
+  outline: none;
+  color: #e7ebf1;
+  background: #0b1017;
+  font: inherit;
+}
+
+.search-requirement-add select:focus,
+.search-requirement-field input:focus {
+  border-color: #54d692;
+  box-shadow: 0 0 0 0.2rem rgb(84 214 146 / 15%);
+}
+
+.search-requirement-add button {
+  align-self: end;
+  min-height: 2.75rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid #54d692;
+  border-radius: 0.55rem;
+  color: #07110c;
+  background: #78dba9;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.search-requirements-empty {
+  margin: 1rem 0 0;
+  padding: 1rem;
+  border: 1px dashed #303a49;
+  border-radius: 0.55rem;
+  color: #7f8b9d;
+  text-align: center;
+}
+
+.search-requirements-list {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.search-requirement-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #303a49;
+  border-radius: 0.7rem;
+  background: #151c26;
+}
+
+.search-requirement-card legend {
+  padding: 0 0.4rem;
+  color: #f4f7fb;
+  font-weight: 700;
+}
+
+.search-requirement-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.search-requirement-card-heading p {
+  margin: 0;
+  color: #7f8b9d;
+  font-size: 0.8rem;
+}
+
+.search-requirement-card-heading button {
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgb(255 107 107 / 55%);
+  border-radius: 0.45rem;
+  color: #ff9191;
+  background: rgb(112 39 39 / 22%);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.search-requirement-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 52rem) {
+  .search-requirements-heading {
+    display: grid;
+    gap: 0.8rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  .search-requirement-add,
+  .search-requirement-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .search-requirement-add button {
+    width: 100%;
+  }
+
+  .search-requirement-card-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

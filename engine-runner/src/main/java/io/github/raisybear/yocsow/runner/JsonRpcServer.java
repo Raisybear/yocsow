@@ -1,5 +1,8 @@
 package io.github.raisybear.yocsow.runner;
 
+import io.github.raisybear.yocsow.engine.search.seed.SeedSearchService;
+import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegistry;
+import io.github.raisybear.yocsow.engine.search.structure.cubiomes.CubiomesVillageLocator;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -8,6 +11,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Objects;
+import java.util.function.Supplier;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -22,12 +28,19 @@ final class JsonRpcServer {
   private final EngineProtocol protocol;
 
   JsonRpcServer() {
-    this(JsonMapper.builder().build());
+    this(JsonMapper.builder().build(), JsonRpcServer::createSeedSearchService);
   }
 
   JsonRpcServer(ObjectMapper objectMapper) {
-    this.objectMapper = objectMapper;
-    this.protocol = new EngineProtocol(objectMapper);
+    this(objectMapper, JsonRpcServer::createSeedSearchService);
+  }
+
+  JsonRpcServer(ObjectMapper objectMapper, Supplier<SeedSearchService> seedSearchServiceFactory) {
+    this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+    this.protocol =
+        new EngineProtocol(
+            objectMapper,
+            Objects.requireNonNull(seedSearchServiceFactory, "seedSearchServiceFactory"));
   }
 
   void serve(InputStream input, OutputStream output) throws IOException {
@@ -136,5 +149,10 @@ final class JsonRpcServer {
     } else {
       response.set("id", id);
     }
+  }
+
+  private static SeedSearchService createSeedSearchService() {
+    return new SeedSearchService(
+        new StructureLocatorRegistry(List.of(new CubiomesVillageLocator())));
   }
 }

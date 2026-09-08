@@ -7,6 +7,7 @@ script_directory="$(
   pwd
 )"
 project_root="$(cd -- "$script_directory/.." && pwd)"
+native_build_directory="$project_root/build/native"
 
 cd "$project_root"
 
@@ -29,6 +30,29 @@ run_step \
 run_step \
   "Check staged whitespace" \
   git diff --cached --check
+
+run_step \
+  "Configure native components" \
+  cmake \
+    --fresh \
+    -S native \
+    -B "$native_build_directory" \
+    -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTING=ON
+
+run_step \
+  "Build native components" \
+  cmake \
+    --build "$native_build_directory" \
+    --config Release
+
+run_step \
+  "Test native components" \
+  ctest \
+    --test-dir "$native_build_directory" \
+    --build-config Release \
+    --output-on-failure
 
 run_step \
   "Lint desktop frontend" \

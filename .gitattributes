@@ -16,3 +16,5 @@
 *.png binary
 *.wasm binary
 *.zip binary
+# Preserve third-party source formatting from upstream.
+third_party/cubiomes/** -whitespace

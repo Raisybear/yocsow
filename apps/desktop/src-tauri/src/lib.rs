@@ -1,6 +1,7 @@
 mod commands;
 mod engine_process;
 mod project_files;
+mod seed_search;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,12 +16,14 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_app_info,
             commands::get_engine_status,
             commands::seed_range_contains,
+            commands::search_seeds,
             commands::load_project,
             commands::save_project
         ])

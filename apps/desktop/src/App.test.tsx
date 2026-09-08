@@ -34,6 +34,12 @@ describe('App', () => {
     ).toBeInTheDocument()
 
     expect(screen.getByText('YOCSOW')).toBeInTheDocument()
+
+    expect(
+      screen.getByRole('heading', {
+        name: 'Search requirements',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('shows the configured technology foundation', () => {

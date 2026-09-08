@@ -1,4 +1,6 @@
 import { ProjectWorkspace } from './components/ProjectWorkspace'
+import { SearchRequirementsPanel } from './components/SearchRequirementsPanel'
+import { SeedFinderPanel } from './components/SeedFinderPanel'
 import { SeedRangePanel } from './components/SeedRangePanel'
 import { SystemStatus } from './components/SystemStatus'
 import { useProjectWorkspace } from './hooks/useProjectWorkspace'
@@ -15,7 +17,10 @@ function App() {
 
   return (
     <main className="app-shell">
-      <section className="welcome-card" aria-labelledby="app-title">
+      <section
+        className="welcome-card"
+        aria-labelledby="app-title"
+      >
         <header className="app-header">
           <div>
             <p className="eyebrow">YOCSOW</p>
@@ -39,9 +44,19 @@ function App() {
           ))}
         </dl>
 
+        <SearchRequirementsPanel
+          requirements={workspace.project.searchRequirements}
+          onChange={workspace.updateSearchRequirements}
+        />
+
         <SeedRangePanel
           seedRange={workspace.project.seedRange}
           onChange={workspace.updateSeedRange}
+        />
+
+        <SeedFinderPanel
+          seedRange={workspace.project.seedRange}
+          requirements={workspace.project.searchRequirements}
         />
 
         <SystemStatus />

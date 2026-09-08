@@ -1,5 +1,6 @@
 use crate::engine_process::{EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult};
 use crate::project_files::{self, ProjectDocument};
+use crate::seed_search::{SeedSearchQuery, SeedSearchRequirementInput, SeedSearchResult};
 use serde::Serialize;
 use std::path::Path;
 use tauri::State;
@@ -47,6 +48,27 @@ pub fn seed_range_contains(
     state
         .seed_range_contains(query)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn search_seeds(
+    state: State<'_, EngineState>,
+    first_seed: String,
+    seed_count: u32,
+    minecraft_version: String,
+    requirements: Vec<SeedSearchRequirementInput>,
+    result_limit: u32,
+) -> Result<SeedSearchResult, String> {
+    let query = SeedSearchQuery::parse(
+        &first_seed,
+        seed_count,
+        &minecraft_version,
+        requirements,
+        result_limit,
+    )
+    .map_err(|error| error.to_string())?;
+
+    state.search_seeds(query).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

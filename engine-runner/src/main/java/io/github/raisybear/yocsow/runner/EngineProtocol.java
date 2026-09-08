@@ -1,6 +1,11 @@
 package io.github.raisybear.yocsow.runner;
 
+import io.github.raisybear.yocsow.engine.search.seed.SeedSearchRequest;
+import io.github.raisybear.yocsow.engine.search.seed.SeedSearchResult;
+import io.github.raisybear.yocsow.engine.search.seed.SeedSearchService;
 import io.github.raisybear.yocsow.engine.seed.SeedRange;
+import java.util.Objects;
+import java.util.function.Supplier;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -11,13 +16,21 @@ final class EngineProtocol {
   static final String ENGINE_VERSION = "0.1.0-SNAPSHOT";
 
   private static final int INVALID_PARAMS = -32602;
+  private static final int ENGINE_FAILURE = -32000;
   private static final int ENGINE_NOT_INITIALIZED = -32002;
 
   private final ObjectMapper objectMapper;
+  private final SeedSearchJsonCodec seedSearchJsonCodec;
+  private final Supplier<SeedSearchService> seedSearchServiceFactory;
+
+  private SeedSearchService seedSearchService;
   private boolean initialized;
 
-  EngineProtocol(ObjectMapper objectMapper) {
-    this.objectMapper = objectMapper;
+  EngineProtocol(ObjectMapper objectMapper, Supplier<SeedSearchService> seedSearchServiceFactory) {
+    this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper");
+    this.seedSearchServiceFactory =
+        Objects.requireNonNull(seedSearchServiceFactory, "seedSearchServiceFactory");
+    this.seedSearchJsonCodec = new SeedSearchJsonCodec(objectMapper);
   }
 
   Invocation invoke(String method, JsonNode params) {
@@ -25,6 +38,7 @@ final class EngineProtocol {
       case "engine.initialize" -> initialize(params);
       case "engine.health" -> health(params);
       case "seed.range.contains" -> seedRangeContains(params);
+      case "seed.search" -> seedSearch(params);
       default -> Invocation.error(-32601, "Method not found");
     };
   }
@@ -47,7 +61,11 @@ final class EngineProtocol {
     ObjectNode result = objectMapper.createObjectNode();
     result.put("protocolVersion", PROTOCOL_VERSION);
     result.put("engineVersion", ENGINE_VERSION);
-    result.putArray("capabilities").add("engine.health").add("seed.range.contains");
+    result
+        .putArray("capabilities")
+        .add("engine.health")
+        .add("seed.range.contains")
+        .add("seed.search");
 
     return Invocation.success(result);
   }
@@ -95,6 +113,44 @@ final class EngineProtocol {
     result.put("contains", range.contains(seed));
 
     return Invocation.success(result);
+  }
+
+  private Invocation seedSearch(JsonNode params) {
+    if (!initialized) {
+      return Invocation.error(ENGINE_NOT_INITIALIZED, "Engine not initialized");
+    }
+
+    try {
+      SeedSearchRequest request = seedSearchJsonCodec.readRequest(params);
+
+      SeedSearchResult result = requireSeedSearchService().search(request);
+
+      return Invocation.success(seedSearchJsonCodec.writeResult(result));
+    } catch (IllegalArgumentException exception) {
+      return Invocation.error(INVALID_PARAMS, errorMessage(exception, "Invalid params"));
+    } catch (RuntimeException | LinkageError exception) {
+      return Invocation.error(ENGINE_FAILURE, "Seed search failed");
+    }
+  }
+
+  private SeedSearchService requireSeedSearchService() {
+    if (seedSearchService == null) {
+      seedSearchService =
+          Objects.requireNonNull(
+              seedSearchServiceFactory.get(), "seedSearchServiceFactory returned null");
+    }
+
+    return seedSearchService;
+  }
+
+  private String errorMessage(RuntimeException exception, String fallback) {
+    String message = exception.getMessage();
+
+    if (message == null || message.isBlank()) {
+      return fallback;
+    }
+
+    return message;
   }
 
   private Long readLong(JsonNode value) {
