@@ -34,6 +34,7 @@ run_step \
 run_step \
   "Configure native components" \
   cmake \
+    --fresh \
     -S native \
     -B "$native_build_directory" \
     -G Ninja \

@@ -61,26 +61,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Configure native components
-        run: >
-          cmake
-          -S native
-          -B build/native
-          -DBUILD_TESTING=ON
-
-      - name: Build native components
-        run: >
-          cmake
-          --build build/native
-          --config Release
-
-      - name: Test native components
-        run: >
-          ctest
-          --test-dir build/native
-          --build-config Release
-          --output-on-failure
-
       - name: Run project verification
         run: ./scripts/verify.sh
 
