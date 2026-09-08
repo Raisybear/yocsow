@@ -1,3 +1,4 @@
+use crate::seed_search::{SeedSearchQuery, SeedSearchResult};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -12,7 +13,7 @@ use std::sync::Mutex;
 const JSON_RPC_VERSION: &str = "2.0";
 const PROTOCOL_VERSION: u32 = 1;
 const ENGINE_RUNNER_ENVIRONMENT_VARIABLE: &str = "YOCSOW_ENGINE_RUNNER";
-const REQUIRED_CAPABILITIES: [&str; 2] = ["engine.health", "seed.range.contains"];
+const REQUIRED_CAPABILITIES: [&str; 3] = ["engine.health", "seed.range.contains", "seed.search"];
 
 pub struct EngineState {
     process: Mutex<Option<EngineProcess>>,
@@ -36,6 +37,13 @@ impl EngineState {
         query: SeedRangeQuery,
     ) -> Result<SeedRangeResult, EngineProcessError> {
         self.with_process(|process| process.seed_range_contains(query))
+    }
+
+    pub(crate) fn search_seeds(
+        &self,
+        query: SeedSearchQuery,
+    ) -> Result<SeedSearchResult, EngineProcessError> {
+        self.with_process(|process| process.search_seeds(query))
     }
 
     fn with_process<T>(
@@ -231,6 +239,19 @@ impl EngineProcess {
             })),
         )
     }
+
+    fn search_seeds(
+        &mut self,
+        query: SeedSearchQuery,
+    ) -> Result<SeedSearchResult, EngineProcessError> {
+        let params = serde_json::to_value(query)?;
+
+        let result: SeedSearchResult = self.client.call("seed.search", Some(params))?;
+
+        result.validate()?;
+
+        Ok(result)
+    }
 }
 
 impl Drop for EngineProcess {
@@ -371,12 +392,18 @@ impl Display for EngineProcessError {
             Self::Configuration(message) => {
                 write!(formatter, "engine configuration error: {message}")
             }
-            Self::Input(message) => write!(formatter, "invalid engine query: {message}"),
-            Self::Protocol(message) => write!(formatter, "engine protocol error: {message}"),
+            Self::Input(message) => {
+                write!(formatter, "invalid engine query: {message}")
+            }
+            Self::Protocol(message) => {
+                write!(formatter, "engine protocol error: {message}")
+            }
             Self::Remote { code, message } => {
                 write!(formatter, "engine returned error {code}: {message}")
             }
-            Self::State(message) => write!(formatter, "engine state error: {message}"),
+            Self::State(message) => {
+                write!(formatter, "engine state error: {message}")
+            }
         }
     }
 }
