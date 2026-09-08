@@ -61,7 +61,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-              - name: Configure native components
+      - name: Configure native components
         run: >
           cmake
           -S native
