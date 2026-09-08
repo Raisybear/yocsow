@@ -18,6 +18,8 @@ repositories {
 }
 
 dependencies {
+    implementation("net.java.dev.jna:jna:5.19.1")
+
     testImplementation(platform("org.junit:junit-bom:6.1.3"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
