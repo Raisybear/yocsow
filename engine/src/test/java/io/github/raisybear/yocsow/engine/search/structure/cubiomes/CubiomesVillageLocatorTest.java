@@ -22,6 +22,20 @@ class CubiomesVillageLocatorTest {
   }
 
   @Test
+  void locatesKnownVillageThroughPackagedNativeLibrary() {
+    CubiomesVillageLocator locator = new CubiomesVillageLocator();
+
+    StructureRequirement requirement =
+        new StructureRequirement(
+            "village-native-test", StructureType.VILLAGE, new BlockPosition(0, 0), 1_000);
+
+    StructureSearchRequest request =
+        new StructureSearchRequest(42, MinecraftVersion.JAVA_1_21, requirement);
+
+    assertEquals(Optional.of(new BlockPosition(656, -304)), locator.findNearest(request));
+  }
+
+  @Test
   void forwardsSearchRequestsAndReturnsVillagePositions() {
     RecordingNativeLibrary nativeLibrary = new RecordingNativeLibrary();
 
