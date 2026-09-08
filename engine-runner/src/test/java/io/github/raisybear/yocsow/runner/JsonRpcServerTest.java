@@ -4,12 +4,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.raisybear.yocsow.engine.search.BlockPosition;
+import io.github.raisybear.yocsow.engine.search.StructureType;
+import io.github.raisybear.yocsow.engine.search.seed.SeedSearchService;
+import io.github.raisybear.yocsow.engine.search.structure.StructureLocator;
+import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegistry;
+import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -42,6 +52,7 @@ class JsonRpcServerTest {
     assertEquals("engine.health", responses.get(1).at("/result/capabilities/0").stringValue());
     assertEquals(
         "seed.range.contains", responses.get(1).at("/result/capabilities/1").stringValue());
+    assertEquals("seed.search", responses.get(1).at("/result/capabilities/2").stringValue());
 
     assertEquals(3, responses.get(2).get("id").intValue());
     assertTrue(responses.get(2).at("/result/initialized").booleanValue());
@@ -68,6 +79,47 @@ class JsonRpcServerTest {
   }
 
   @Test
+  void searchesSeedsAndReturnsRankedVillageMatches() throws IOException {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+
+    locator.locate(10, "village-1", new BlockPosition(900, 0));
+    locator.locate(11, "village-1", new BlockPosition(600, 0));
+    locator.locate(11, "village-2", new BlockPosition(0, 800));
+    locator.locate(12, "village-1", new BlockPosition(100, 0));
+
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":10,"seedCount":3,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000},{"id":"village-2","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":3}}
+        """;
+
+    List<JsonNode> responses = serve(input, serviceUsing(locator));
+
+    assertEquals(2, responses.size());
+
+    JsonNode result = responses.get(1).get("result");
+
+    assertEquals(3, result.get("searchedSeedCount").intValue());
+    assertEquals(3, result.get("candidates").size());
+
+    JsonNode first = result.at("/candidates/0");
+    JsonNode second = result.at("/candidates/1");
+    JsonNode third = result.at("/candidates/2");
+
+    assertEquals(11, first.get("seed").longValue());
+    assertEquals(2, first.get("matchedRequirementCount").intValue());
+    assertTrue(first.get("matchesAllRequirements").booleanValue());
+    assertEquals("village", first.at("/matches/0/structureType").stringValue());
+    assertEquals(800, first.at("/matches/1/actualPosition/z").longValue());
+
+    assertEquals(12, second.get("seed").longValue());
+    assertEquals(0.1, second.get("averageNormalizedDistance").doubleValue(), 0.000_001);
+
+    assertEquals(10, third.get("seed").longValue());
+    assertEquals(900, third.at("/matches/0/actualPosition/x").longValue());
+  }
+
+  @Test
   void requiresInitializationBeforeSeedQueries() throws IOException {
     String input =
         """
@@ -79,6 +131,19 @@ class JsonRpcServerTest {
     assertEquals(1, responses.size());
     assertEquals(-32002, responses.getFirst().at("/error/code").intValue());
     assertEquals("Engine not initialized", responses.getFirst().at("/error/message").stringValue());
+  }
+
+  @Test
+  void requiresInitializationBeforeSeedSearch() throws IOException {
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        """;
+
+    List<JsonNode> responses = serve(input);
+
+    assertEquals(1, responses.size());
+    assertEquals(-32002, responses.getFirst().at("/error/code").intValue());
   }
 
   @Test
@@ -106,6 +171,64 @@ class JsonRpcServerTest {
     assertEquals(
         "minimum must not be greater than maximum",
         responses.get(5).at("/error/message").stringValue());
+  }
+
+  @Test
+  void rejectsInvalidSeedSearchParameters() throws IOException {
+    String input =
+        """
+        {"jsonrpc":"2.0","id":0,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":1,"method":"seed.search"}
+        {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[]}}
+        {"jsonrpc":"2.0","id":3,"method":"seed.search","params":{"firstSeed":0,"seedCount":"1","minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        {"jsonrpc":"2.0","id":4,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.20","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        {"jsonrpc":"2.0","id":5,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"bastion","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        {"jsonrpc":"2.0","id":6,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1,"extra":true}}
+        {"jsonrpc":"2.0","id":7,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000},{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        {"jsonrpc":"2.0","id":8,"method":"seed.search","params":{"firstSeed":9223372036854775807,"seedCount":2,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        """;
+
+    List<JsonNode> responses = serve(input);
+
+    assertEquals(9, responses.size());
+
+    for (int index = 1; index < responses.size(); index++) {
+      assertEquals(index, responses.get(index).get("id").intValue());
+      assertEquals(-32602, responses.get(index).at("/error/code").intValue());
+    }
+
+    assertEquals(
+        "unsupported Minecraft version: 1.20", responses.get(4).at("/error/message").stringValue());
+    assertEquals(
+        "unsupported structure type: bastion", responses.get(5).at("/error/message").stringValue());
+    assertEquals(
+        "duplicate requirement id: village-1", responses.get(7).at("/error/message").stringValue());
+    assertEquals(
+        "seed batch must not exceed the signed 64-bit range",
+        responses.get(8).at("/error/message").stringValue());
+  }
+
+  @Test
+  void returnsEngineFailureWithoutStoppingServer() throws IOException {
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        {"jsonrpc":"2.0","id":3,"method":"engine.health"}
+        """;
+
+    List<JsonNode> responses =
+        serve(
+            input,
+            () -> {
+              throw new UnsatisfiedLinkError("missing test library");
+            });
+
+    assertEquals(3, responses.size());
+    assertEquals(-32000, responses.get(1).at("/error/code").intValue());
+    assertEquals("Seed search failed", responses.get(1).at("/error/message").stringValue());
+    assertEquals("ok", responses.get(2).at("/result/status").stringValue());
+    assertTrue(responses.get(2).at("/result/initialized").booleanValue());
   }
 
   @Test
@@ -181,11 +304,21 @@ class JsonRpcServerTest {
   }
 
   private List<JsonNode> serve(String input) throws IOException {
+    return serve(input, serviceUsing(new RecordingVillageLocator()));
+  }
+
+  private List<JsonNode> serve(String input, SeedSearchService seedSearchService)
+      throws IOException {
+    return serve(input, () -> seedSearchService);
+  }
+
+  private List<JsonNode> serve(String input, Supplier<SeedSearchService> seedSearchServiceFactory)
+      throws IOException {
     ByteArrayInputStream requestStream =
         new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8));
     ByteArrayOutputStream responseStream = new ByteArrayOutputStream();
 
-    new JsonRpcServer().serve(requestStream, responseStream);
+    new JsonRpcServer(objectMapper, seedSearchServiceFactory).serve(requestStream, responseStream);
 
     List<JsonNode> responses = new ArrayList<>();
 
@@ -197,4 +330,30 @@ class JsonRpcServerTest {
 
     return responses;
   }
+
+  private SeedSearchService serviceUsing(StructureLocator locator) {
+    return new SeedSearchService(new StructureLocatorRegistry(List.of(locator)));
+  }
+
+  private static final class RecordingVillageLocator implements StructureLocator {
+
+    private final Map<SearchKey, BlockPosition> positions = new HashMap<>();
+
+    void locate(long seed, String requirementId, BlockPosition position) {
+      positions.put(new SearchKey(seed, requirementId), position);
+    }
+
+    @Override
+    public StructureType structureType() {
+      return StructureType.VILLAGE;
+    }
+
+    @Override
+    public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+      return Optional.ofNullable(
+          positions.get(new SearchKey(request.seed(), request.requirement().id())));
+    }
+  }
+
+  private record SearchKey(long seed, String requirementId) {}
 }
