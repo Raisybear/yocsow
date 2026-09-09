@@ -106,11 +106,16 @@ if (process.platform === 'linux') {
     .join(delimiter)
 }
 
-const npmExecutable = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const npmCli = process.env.npm_execpath
+
+if (!npmCli) {
+  fail('npm_execpath is not set; run this build through npm')
+}
 
 run(
-  npmExecutable,
+  process.execPath,
   [
+    npmCli,
     'run',
     'tauri',
     '--workspace=@yocsow/desktop',
