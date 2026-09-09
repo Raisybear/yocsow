@@ -493,7 +493,7 @@ fn engine_launch(app: &AppHandle) -> Result<EngineLaunch, EngineProcessError> {
         ))
     })?;
 
-    Ok(packaged_engine_launch(&resource_directory))
+    packaged_engine_launch(&resource_directory)
 }
 
 fn development_engine_launch() -> Result<EngineLaunch, EngineProcessError> {
@@ -523,22 +523,47 @@ fn development_engine_launch() -> Result<EngineLaunch, EngineProcessError> {
     })
 }
 
-fn packaged_engine_launch(resource_directory: &Path) -> EngineLaunch {
+fn packaged_engine_launch(resource_directory: &Path) -> Result<EngineLaunch, EngineProcessError> {
     let java_executable = resource_directory
         .join("java-runtime")
         .join("bin")
         .join(if cfg!(windows) { "java.exe" } else { "java" });
     let library_directory = resource_directory.join("engine-runner").join("lib");
+    let class_path = engine_class_path(&library_directory)?;
 
-    EngineLaunch {
+    Ok(EngineLaunch {
         executable: java_executable,
         arguments: vec![
             OsString::from("-cp"),
-            library_directory.join("*").into_os_string(),
+            class_path,
             OsString::from(ENGINE_RUNNER_MAIN_CLASS),
         ],
         required_library_directory: Some(library_directory),
+    })
+}
+
+fn engine_class_path(library_directory: &Path) -> Result<OsString, EngineProcessError> {
+    let mut jar_files = std::fs::read_dir(library_directory)?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    jar_files
+        .retain(|path| path.extension().and_then(|extension| extension.to_str()) == Some("jar"));
+    jar_files.sort();
+
+    if jar_files.is_empty() {
+        return Err(EngineProcessError::Configuration(format!(
+            "engine library directory contains no JAR files: {}",
+            library_directory.display()
+        )));
     }
+
+    env::join_paths(&jar_files).map_err(|error| {
+        EngineProcessError::Configuration(format!(
+            "could not construct the engine class path from {}: {error}",
+            library_directory.display()
+        ))
+    })
 }
 
 #[cfg(test)]
@@ -548,15 +573,38 @@ mod tests {
         JsonRpcClient, SeedRangeQuery, SeedRangeResult, packaged_engine_launch,
     };
     use serde_json::{Value, json};
+    use std::env;
+    use std::fs::{create_dir_all, remove_dir_all, write};
     use std::io::{BufReader, Cursor};
-    use std::path::Path;
+    use std::process;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn packaged_launch_uses_bundled_java_and_engine_libraries() {
-        let resource_directory = Path::new("application-resources");
-        let launch = packaged_engine_launch(resource_directory);
+        let unique_suffix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time should be after the Unix epoch")
+            .as_nanos();
+        let resource_directory = env::temp_dir().join(format!(
+            "yocsow-packaged-launch-{}-{unique_suffix}",
+            process::id()
+        ));
         let java_name = if cfg!(windows) { "java.exe" } else { "java" };
         let library_directory = resource_directory.join("engine-runner").join("lib");
+        let first_jar = library_directory.join("a-engine.jar");
+        let second_jar = library_directory.join("b-runner.jar");
+
+        create_dir_all(&library_directory)
+            .expect("temporary engine library directory should be created");
+        write(&second_jar, []).expect("second temporary JAR should be created");
+        write(&first_jar, []).expect("first temporary JAR should be created");
+        write(library_directory.join("README.txt"), [])
+            .expect("non-JAR test file should be created");
+
+        let expected_class_path = env::join_paths([&first_jar, &second_jar])
+            .expect("temporary JAR paths should form a valid class path");
+        let launch = packaged_engine_launch(&resource_directory)
+            .expect("packaged launch should be resolved");
 
         assert_eq!(
             launch.executable,
@@ -566,15 +614,14 @@ mod tests {
                 .join(java_name)
         );
         assert_eq!(launch.arguments[0], "-cp");
-        assert_eq!(
-            launch.arguments[1],
-            library_directory.join("*").into_os_string()
-        );
+        assert_eq!(launch.arguments[1], expected_class_path);
         assert_eq!(launch.arguments[2], ENGINE_RUNNER_MAIN_CLASS);
         assert_eq!(
             launch.required_library_directory.as_deref(),
             Some(library_directory.as_path())
         );
+
+        remove_dir_all(resource_directory).expect("temporary resource directory should be removed");
     }
 
     #[test]
