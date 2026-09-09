@@ -558,12 +558,52 @@ fn engine_class_path(library_directory: &Path) -> Result<OsString, EngineProcess
         )));
     }
 
-    env::join_paths(&jar_files).map_err(|error| {
+    let java_compatible_jar_files = jar_files
+        .iter()
+        .map(|path| java_compatible_path(path.as_path()));
+
+    env::join_paths(java_compatible_jar_files).map_err(|error| {
         EngineProcessError::Configuration(format!(
             "could not construct the engine class path from {}: {error}",
             library_directory.display()
         ))
     })
+}
+
+#[cfg(windows)]
+fn java_compatible_path(path: &Path) -> PathBuf {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+
+    const VERBATIM_PREFIX: &[u16] = &[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16];
+    const VERBATIM_UNC_PREFIX: &[u16] = &[
+        b'\\' as u16,
+        b'\\' as u16,
+        b'?' as u16,
+        b'\\' as u16,
+        b'U' as u16,
+        b'N' as u16,
+        b'C' as u16,
+        b'\\' as u16,
+    ];
+
+    let encoded_path = path.as_os_str().encode_wide().collect::<Vec<_>>();
+
+    if let Some(unc_path) = encoded_path.strip_prefix(VERBATIM_UNC_PREFIX) {
+        let mut compatible_path = vec![b'\\' as u16, b'\\' as u16];
+        compatible_path.extend_from_slice(unc_path);
+        return PathBuf::from(OsString::from_wide(&compatible_path));
+    }
+
+    if let Some(compatible_path) = encoded_path.strip_prefix(VERBATIM_PREFIX) {
+        return PathBuf::from(OsString::from_wide(compatible_path));
+    }
+
+    path.to_path_buf()
+}
+
+#[cfg(not(windows))]
+fn java_compatible_path(path: &Path) -> PathBuf {
+    path.to_path_buf()
 }
 
 #[cfg(test)]
@@ -576,8 +616,23 @@ mod tests {
     use std::env;
     use std::fs::{create_dir_all, remove_dir_all, write};
     use std::io::{BufReader, Cursor};
+    #[cfg(windows)]
+    use std::path::{Path, PathBuf};
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[cfg(windows)]
+    #[test]
+    fn java_class_path_removes_windows_verbatim_prefixes() {
+        assert_eq!(
+            super::java_compatible_path(Path::new(r"\\?\C:\YOCSOW\engine-runner.jar")),
+            PathBuf::from(r"C:\YOCSOW\engine-runner.jar")
+        );
+        assert_eq!(
+            super::java_compatible_path(Path::new(r"\\?\UNC\server\share\engine-runner.jar")),
+            PathBuf::from(r"\\server\share\engine-runner.jar")
+        );
+    }
 
     #[test]
     fn packaged_launch_uses_bundled_java_and_engine_libraries() {
