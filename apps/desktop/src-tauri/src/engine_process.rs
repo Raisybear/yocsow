@@ -4,30 +4,35 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::env;
 use std::error::Error;
+use std::ffi::OsString;
 use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::Mutex;
+use tauri::{AppHandle, Manager};
 
 const JSON_RPC_VERSION: &str = "2.0";
 const PROTOCOL_VERSION: u32 = 1;
 const ENGINE_RUNNER_ENVIRONMENT_VARIABLE: &str = "YOCSOW_ENGINE_RUNNER";
+const ENGINE_RUNNER_MAIN_CLASS: &str = "io.github.raisybear.yocsow.runner.EngineRunner";
 const REQUIRED_CAPABILITIES: [&str; 3] = ["engine.health", "seed.range.contains", "seed.search"];
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct EngineState {
+    launch: EngineLaunch,
     process: Mutex<Option<EngineProcess>>,
 }
 
-impl Default for EngineState {
-    fn default() -> Self {
-        Self {
-            process: Mutex::new(None),
-        }
-    }
-}
-
 impl EngineState {
+    pub(crate) fn for_app(app: &AppHandle) -> Result<Self, EngineProcessError> {
+        Ok(Self {
+            launch: engine_launch(app)?,
+            process: Mutex::new(None),
+        })
+    }
+
     pub(crate) fn status(&self) -> Result<EngineStatus, EngineProcessError> {
         self.with_process(EngineProcess::health)
     }
@@ -56,8 +61,7 @@ impl EngineState {
             .map_err(|_| EngineProcessError::State("engine process lock was poisoned".into()))?;
 
         if process.is_none() {
-            let executable = engine_runner_path()?;
-            let mut started_process = EngineProcess::start(&executable)?;
+            let mut started_process = EngineProcess::start(&self.launch)?;
             started_process.initialize()?;
             *process = Some(started_process);
         }
@@ -128,17 +132,65 @@ struct EngineProcess {
     client: JsonRpcClient<BufReader<ChildStdout>, ChildStdin>,
 }
 
-impl EngineProcess {
-    fn start(executable: &Path) -> Result<Self, EngineProcessError> {
-        if !executable.is_file() {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct EngineLaunch {
+    executable: PathBuf,
+    arguments: Vec<OsString>,
+    required_library_directory: Option<PathBuf>,
+}
+
+impl EngineLaunch {
+    fn validate(&self) -> Result<(), EngineProcessError> {
+        if !self.executable.is_file() {
             return Err(EngineProcessError::Configuration(format!(
-                "engine runner not found at {}; run ./gradlew :engine-runner:installDist \
-                 or set {ENGINE_RUNNER_ENVIRONMENT_VARIABLE}",
-                executable.display()
+                "engine executable not found at {}",
+                self.executable.display()
             )));
         }
 
-        let mut child = Command::new(executable)
+        let Some(library_directory) = &self.required_library_directory else {
+            return Ok(());
+        };
+
+        if !library_directory.is_dir() {
+            return Err(EngineProcessError::Configuration(format!(
+                "engine libraries not found at {}",
+                library_directory.display()
+            )));
+        }
+
+        let contains_jar = std::fs::read_dir(library_directory)?.any(|entry| {
+            entry.is_ok_and(|entry| {
+                entry.path().extension().and_then(|value| value.to_str()) == Some("jar")
+            })
+        });
+
+        if !contains_jar {
+            return Err(EngineProcessError::Configuration(format!(
+                "engine library directory contains no JAR files: {}",
+                library_directory.display()
+            )));
+        }
+
+        Ok(())
+    }
+}
+
+impl EngineProcess {
+    fn start(launch: &EngineLaunch) -> Result<Self, EngineProcessError> {
+        launch.validate()?;
+
+        let mut command = Command::new(&launch.executable);
+        command.args(&launch.arguments);
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -422,11 +474,29 @@ impl From<serde_json::Error> for EngineProcessError {
     }
 }
 
-fn engine_runner_path() -> Result<PathBuf, EngineProcessError> {
+fn engine_launch(app: &AppHandle) -> Result<EngineLaunch, EngineProcessError> {
     if let Some(configured_path) = env::var_os(ENGINE_RUNNER_ENVIRONMENT_VARIABLE) {
-        return Ok(PathBuf::from(configured_path));
+        return Ok(EngineLaunch {
+            executable: PathBuf::from(configured_path),
+            arguments: Vec::new(),
+            required_library_directory: None,
+        });
     }
 
+    if cfg!(debug_assertions) {
+        return development_engine_launch();
+    }
+
+    let resource_directory = app.path().resource_dir().map_err(|error| {
+        EngineProcessError::Configuration(format!(
+            "could not resolve the application resource directory: {error}"
+        ))
+    })?;
+
+    Ok(packaged_engine_launch(&resource_directory))
+}
+
+fn development_engine_launch() -> Result<EngineLaunch, EngineProcessError> {
     let repository_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(3)
@@ -440,23 +510,72 @@ fn engine_runner_path() -> Result<PathBuf, EngineProcessError> {
         "engine-runner"
     };
 
-    Ok(repository_root
-        .join("engine-runner")
-        .join("build")
-        .join("install")
-        .join("engine-runner")
+    Ok(EngineLaunch {
+        executable: repository_root
+            .join("engine-runner")
+            .join("build")
+            .join("install")
+            .join("engine-runner")
+            .join("bin")
+            .join(executable_name),
+        arguments: Vec::new(),
+        required_library_directory: None,
+    })
+}
+
+fn packaged_engine_launch(resource_directory: &Path) -> EngineLaunch {
+    let java_executable = resource_directory
+        .join("java-runtime")
         .join("bin")
-        .join(executable_name))
+        .join(if cfg!(windows) { "java.exe" } else { "java" });
+    let library_directory = resource_directory.join("engine-runner").join("lib");
+
+    EngineLaunch {
+        executable: java_executable,
+        arguments: vec![
+            OsString::from("-cp"),
+            library_directory.join("*").into_os_string(),
+            OsString::from(ENGINE_RUNNER_MAIN_CLASS),
+        ],
+        required_library_directory: Some(library_directory),
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        EngineProcessError, EngineStatus, JSON_RPC_VERSION, JsonRpcClient, SeedRangeQuery,
-        SeedRangeResult,
+        ENGINE_RUNNER_MAIN_CLASS, EngineProcessError, EngineStatus, JSON_RPC_VERSION,
+        JsonRpcClient, SeedRangeQuery, SeedRangeResult, packaged_engine_launch,
     };
     use serde_json::{Value, json};
     use std::io::{BufReader, Cursor};
+    use std::path::Path;
+
+    #[test]
+    fn packaged_launch_uses_bundled_java_and_engine_libraries() {
+        let resource_directory = Path::new("application-resources");
+        let launch = packaged_engine_launch(resource_directory);
+        let java_name = if cfg!(windows) { "java.exe" } else { "java" };
+        let library_directory = resource_directory.join("engine-runner").join("lib");
+
+        assert_eq!(
+            launch.executable,
+            resource_directory
+                .join("java-runtime")
+                .join("bin")
+                .join(java_name)
+        );
+        assert_eq!(launch.arguments[0], "-cp");
+        assert_eq!(
+            launch.arguments[1],
+            library_directory.join("*").into_os_string()
+        );
+        assert_eq!(launch.arguments[2], ENGINE_RUNNER_MAIN_CLASS);
+        assert_eq!(
+            launch.required_library_directory.as_deref(),
+            Some(library_directory.as_path())
+        );
+    }
 
     #[test]
     fn client_writes_a_request_and_reads_the_result() {

@@ -3,12 +3,15 @@ mod engine_process;
 mod project_files;
 mod seed_search;
 
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .manage(engine_process::EngineState::default())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            app.manage(engine_process::EngineState::for_app(app.handle())?);
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

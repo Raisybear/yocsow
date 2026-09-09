@@ -8,10 +8,11 @@
   "scripts": {
     "dev:desktop": "npm run dev --workspace=@yocsow/desktop",
     "prepare:engine-runner": "node scripts/prepare-engine-runner.mjs",
+    "prepare:desktop-bundle": "node scripts/prepare-desktop-bundle.mjs",
     "predev:desktop:native": "npm run prepare:engine-runner",
     "dev:desktop:native": "npm run tauri --workspace=@yocsow/desktop -- dev",
     "build:desktop": "npm run build --workspace=@yocsow/desktop",
-    "build:desktop:native": "npm run tauri --workspace=@yocsow/desktop -- build",
+    "build:desktop:native": "node scripts/build-desktop-native.mjs",
     "lint:desktop": "npm run lint --workspace=@yocsow/desktop",
     "test:desktop": "npm run test --workspace=@yocsow/desktop"
   },
