@@ -1,0 +1,10 @@
+{
+  "$schema": "../../../node_modules/@tauri-apps/cli/config.schema.json",
+  "bundle": {
+    "resources": {
+      "resources/generated/engine-runner/": "engine-runner/",
+      "resources/generated/java-runtime/": "java-runtime/",
+      "resources/generated/bundle-manifest.json": "bundle-manifest.json"
+    }
+  }
+}
