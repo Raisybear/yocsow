@@ -1,8 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { searchSeeds } from '../native/seed-search'
-import type { SeedRangeQuery } from '../native/seed-range'
+import {
+  createRandomSearchStart,
+  searchSeeds,
+  type SeedSearchResult,
+} from '../native/seed-search'
 import { SeedFinderPanel } from './SeedFinderPanel'
 
 vi.mock('../native/seed-search', async (importOriginal) => {
@@ -13,17 +16,15 @@ vi.mock('../native/seed-search', async (importOriginal) => {
 
   return {
     ...original,
+    createRandomSearchStart: vi.fn(),
     searchSeeds: vi.fn(),
   }
 })
 
+const createRandomSearchStartMock = vi.mocked(
+  createRandomSearchStart,
+)
 const searchSeedsMock = vi.mocked(searchSeeds)
-
-const seedRange: SeedRangeQuery = {
-  minimum: '0',
-  maximum: '4',
-  seed: '0',
-}
 
 const requirements = [
   {
@@ -38,62 +39,76 @@ const requirements = [
   },
 ]
 
+const matchingResult: SeedSearchResult = {
+  searchedSeedCount: 10_000,
+  candidates: [
+    {
+      seed: '10004',
+      totalRequirementCount: 1,
+      matchedRequirementCount: 1,
+      matchesAllRequirements: true,
+      matchRatio: 1,
+      averageNormalizedDistance: 0.46427578011350107,
+      matches: [
+        {
+          requirementId: 'spawn-village',
+          structureType: 'village',
+          targetCenter: {
+            x: '0',
+            z: '0',
+          },
+          radiusBlocks: '1000',
+          actualPosition: {
+            x: '-464',
+            z: '16',
+          },
+          distanceBlocks: 464.27578011350107,
+          normalizedDistance: 0.46427578011350107,
+        },
+      ],
+    },
+  ],
+}
+
 describe('SeedFinderPanel', () => {
   beforeEach(() => {
+    createRandomSearchStartMock.mockReset()
     searchSeedsMock.mockReset()
+
+    createRandomSearchStartMock.mockReturnValue(BigInt(0))
     searchSeedsMock.mockReturnValue(new Promise(() => {}))
   })
 
-  it('searches the inclusive range and displays matches', async () => {
+  it('continues through batches until the result limit is reached', async () => {
     const user = userEvent.setup()
 
-    searchSeedsMock.mockResolvedValue({
-      searchedSeedCount: 5,
-      candidates: [
-        {
-          seed: '4',
-          totalRequirementCount: 1,
-          matchedRequirementCount: 1,
-          matchesAllRequirements: true,
-          matchRatio: 1,
-          averageNormalizedDistance: 0.46427578011350107,
-          matches: [
-            {
-              requirementId: 'spawn-village',
-              structureType: 'village',
-              targetCenter: {
-                x: '0',
-                z: '0',
-              },
-              radiusBlocks: '1000',
-              actualPosition: {
-                x: '-464',
-                z: '16',
-              },
-              distanceBlocks: 464.27578011350107,
-              normalizedDistance: 0.46427578011350107,
-            },
-          ],
-        },
-      ],
-    })
+    searchSeedsMock
+      .mockResolvedValueOnce({
+        searchedSeedCount: 10_000,
+        candidates: [],
+      })
+      .mockResolvedValueOnce(matchingResult)
 
-    render(
-      <SeedFinderPanel
-        seedRange={seedRange}
-        requirements={requirements}
-      />,
-    )
+    render(<SeedFinderPanel requirements={requirements} />)
 
+    const resultLimit = screen.getByLabelText('Result limit')
+    await user.clear(resultLimit)
+    await user.type(resultLimit, '1')
     await user.click(
       screen.getByRole('button', {
         name: 'Search seeds',
       }),
     )
 
-    expect(searchSeedsMock).toHaveBeenCalledWith({
+    expect(
+      await screen.findByText(
+        /Result limit reached\. Checked 20,000 seeds and found 1\/1 complete matches/,
+      ),
+    ).toBeInTheDocument()
+
+    expect(searchSeedsMock).toHaveBeenNthCalledWith(1, {
       firstSeed: '0',
-      seedCount: 5,
+      seedCount: 10_000,
       minecraftVersion: '1.21',
       requirements: [
         {
@@ -106,36 +121,44 @@ describe('SeedFinderPanel', () => {
           radiusBlocks: '1000',
         },
       ],
-      resultLimit: 20,
+      resultLimit: 1,
+    })
+    expect(searchSeedsMock).toHaveBeenNthCalledWith(2, {
+      firstSeed: '10000',
+      seedCount: 10_000,
+      minecraftVersion: '1.21',
+      requirements: [
+        {
+          id: 'spawn-village',
+          structureType: 'village',
+          center: {
+            x: '0',
+            z: '0',
+          },
+          radiusBlocks: '1000',
+        },
+      ],
+      resultLimit: 1,
     })
 
-    expect(
-      await screen.findByText(
-        'Searched 5 seeds and found 1 candidates.',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Seed 4')).toBeInTheDocument()
-    expect(
-      screen.getByText('X -464, Z 16'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Seed 10004')).toBeInTheDocument()
+    expect(screen.getByText('X -464, Z 16')).toBeInTheDocument()
     expect(
       screen.getByText('Distance: 464.3 blocks'),
     ).toBeInTheDocument()
   })
 
-  it('rejects ranges larger than the engine batch limit', async () => {
+  it('stops after the active engine batch completes', async () => {
     const user = userEvent.setup()
+    let finishBatch: ((result: SeedSearchResult) => void) | undefined
 
-    render(
-      <SeedFinderPanel
-        seedRange={{
-          minimum: '0',
-          maximum: '10000',
-          seed: '0',
-        }}
-        requirements={requirements}
-      />,
+    searchSeedsMock.mockReturnValue(
+      new Promise((resolve) => {
+        finishBatch = resolve
+      }),
     )
+
+    render(<SeedFinderPanel requirements={requirements} />)
 
     await user.click(
       screen.getByRole('button', {
@@ -143,21 +166,149 @@ describe('SeedFinderPanel', () => {
       }),
     )
 
-    expect(searchSeedsMock).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(searchSeedsMock).toHaveBeenCalledTimes(1)
+    })
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Stop search',
+      }),
+    )
+
+    expect(
+      screen.getByText('Stopping after the current batch…', {
+        exact: false,
+      }),
+    ).toBeInTheDocument()
+
+    finishBatch?.({
+      searchedSeedCount: 10_000,
+      candidates: [],
+    })
+
     expect(
       await screen.findByText(
-        'Seed search failed: Seed range must not contain more than 10000 seeds.',
+        /Search stopped\. Checked 10,000 seeds and found 0\/20 complete matches/,
       ),
     ).toBeInTheDocument()
+    expect(searchSeedsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('continues until enough seeds match every requirement', async () => {
+    const user = userEvent.setup()
+    const threeRequirements = [
+      requirements[0],
+      {
+        ...requirements[0],
+        id: 'second-village',
+        center: { x: 9_000, z: 0 },
+      },
+      {
+        ...requirements[0],
+        id: 'third-village',
+        center: { x: 28_123, z: 122_333 },
+      },
+    ]
+
+    searchSeedsMock
+      .mockResolvedValueOnce({
+        searchedSeedCount: 10_000,
+        candidates: [
+          {
+            ...matchingResult.candidates[0],
+            seed: '4',
+            totalRequirementCount: 3,
+            matchedRequirementCount: 1,
+            matchesAllRequirements: false,
+            matchRatio: 1 / 3,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        searchedSeedCount: 10_000,
+        candidates: [
+          {
+            ...matchingResult.candidates[0],
+            seed: '10004',
+            totalRequirementCount: 3,
+            matchedRequirementCount: 3,
+            matchesAllRequirements: true,
+            matchRatio: 1,
+          },
+        ],
+      })
+
+    render(<SeedFinderPanel requirements={threeRequirements} />)
+
+    const resultLimit = screen.getByLabelText('Result limit')
+    await user.clear(resultLimit)
+    await user.type(resultLimit, '1')
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Search seeds',
+      }),
+    )
+
+    expect(
+      await screen.findByText(
+        /Result limit reached\. Checked 20,000 seeds and found 1\/1 complete matches/,
+      ),
+    ).toBeInTheDocument()
+    expect(searchSeedsMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Seed 10004')).toBeInTheDocument()
+    expect(screen.getByText('3/3 matched')).toBeInTheDocument()
+  })
+
+  it('orders visible partial matches by their match ratio', async () => {
+    const user = userEvent.setup()
+    const threeRequirements = [
+      requirements[0],
+      { ...requirements[0], id: 'second-village' },
+      { ...requirements[0], id: 'third-village' },
+    ]
+
+    searchSeedsMock.mockResolvedValueOnce({
+      searchedSeedCount: 10_000,
+      candidates: [
+        {
+          ...matchingResult.candidates[0],
+          seed: '1',
+          totalRequirementCount: 3,
+          matchedRequirementCount: 1,
+          matchesAllRequirements: false,
+          matchRatio: 1 / 3,
+        },
+        {
+          ...matchingResult.candidates[0],
+          seed: '2',
+          totalRequirementCount: 3,
+          matchedRequirementCount: 2,
+          matchesAllRequirements: false,
+          matchRatio: 2 / 3,
+        },
+      ],
+    })
+
+    render(<SeedFinderPanel requirements={threeRequirements} />)
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Search seeds',
+      }),
+    )
+
+    await screen.findByText('Seed 2')
+
+    expect(
+      screen
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['Seed 2', 'Seed 1'])
   })
 
   it('requires at least one search requirement', () => {
-    render(
-      <SeedFinderPanel
-        seedRange={seedRange}
-        requirements={[]}
-      />,
-    )
+    render(<SeedFinderPanel requirements={[]} />)
 
     expect(
       screen.getByRole('button', {
@@ -176,12 +327,7 @@ describe('SeedFinderPanel', () => {
 
     searchSeedsMock.mockResolvedValue(null)
 
-    render(
-      <SeedFinderPanel
-        seedRange={seedRange}
-        requirements={requirements}
-      />,
-    )
+    render(<SeedFinderPanel requirements={requirements} />)
 
     await user.click(
       screen.getByRole('button', {
@@ -203,12 +349,7 @@ describe('SeedFinderPanel', () => {
       new Error('Native locator unavailable'),
     )
 
-    render(
-      <SeedFinderPanel
-        seedRange={seedRange}
-        requirements={requirements}
-      />,
-    )
+    render(<SeedFinderPanel requirements={requirements} />)
 
     await user.click(
       screen.getByRole('button', {

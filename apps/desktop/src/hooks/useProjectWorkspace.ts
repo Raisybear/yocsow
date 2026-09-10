@@ -29,10 +29,6 @@ export interface ProjectWorkspaceController {
   saveProject: () => Promise<void>
   saveProjectAs: () => Promise<void>
   updateProjectName: (value: string) => void
-  updateSeedRange: (
-    field: keyof ProjectDocument['seedRange'],
-    value: string,
-  ) => void
   updateSearchRequirements: (
     requirements: ProjectDocument['searchRequirements'],
   ) => void
@@ -42,11 +38,6 @@ function createProject(): ProjectDocument {
   return {
     formatVersion: PROJECT_FORMAT_VERSION,
     name: 'Untitled project',
-    seedRange: {
-      minimum: '-10',
-      maximum: '10',
-      seed: '0',
-    },
     searchRequirements: [],
   }
 }
@@ -195,21 +186,6 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     markProjectChanged()
   }
 
-  function updateSeedRange(
-    field: keyof ProjectDocument['seedRange'],
-    value: string,
-  ): void {
-    setProject((currentProject) => ({
-      ...currentProject,
-      seedRange: {
-        ...currentProject.seedRange,
-        [field]: value,
-      },
-    }))
-
-    markProjectChanged()
-  }
-
   function updateSearchRequirements(
     requirements: ProjectDocument['searchRequirements'],
   ): void {
@@ -232,7 +208,6 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     saveProject,
     saveProjectAs,
     updateProjectName,
-    updateSeedRange,
     updateSearchRequirements,
   }
 }

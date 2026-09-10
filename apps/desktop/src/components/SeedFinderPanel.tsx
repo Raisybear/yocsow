@@ -1,17 +1,36 @@
-import { type FormEvent, useState } from 'react'
+import {
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import type { SearchRequirement } from '../domain/search-requirements'
 import {
+  createRandomSearchStart,
   createSeedSearchRequest,
+  nextSeedAfterBatch,
   searchSeeds,
+  type SeedSearchCandidate,
   type SeedSearchResult,
 } from '../native/seed-search'
-import type { SeedRangeQuery } from '../native/seed-range'
 import './SeedFinderPanel.css'
+
+interface SearchProgress extends SeedSearchResult {
+  elapsedMilliseconds: number
+}
 
 type SeedFinderState =
   | { status: 'idle' }
-  | { status: 'searching' }
-  | { status: 'result'; result: SeedSearchResult }
+  | {
+      status: 'searching'
+      progress: SearchProgress
+      stopRequested: boolean
+    }
+  | {
+      status: 'result'
+      progress: SearchProgress
+      reason: 'limit' | 'stopped'
+    }
   | { status: 'browser' }
   | { status: 'error'; message: string }
 
@@ -20,14 +39,21 @@ interface SeedFinderRequestState {
   state: SeedFinderState
 }
 
+interface SearchSession {
+  fingerprint: string
+  cancelled: boolean
+  progress: SearchProgress
+}
+
 interface SeedFinderPanelProps {
-  seedRange: SeedRangeQuery
   requirements: SearchRequirement[]
 }
 
 const idleState: SeedFinderState = {
   status: 'idle',
 }
+
+const numberFormatter = new Intl.NumberFormat('en-US')
 
 function errorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -38,13 +64,10 @@ function errorMessage(error: unknown): string {
 }
 
 function requestFingerprint(
-  seedRange: SeedRangeQuery,
   requirements: SearchRequirement[],
   resultLimit: string,
 ): string {
   return JSON.stringify({
-    minimum: seedRange.minimum,
-    maximum: seedRange.maximum,
     requirements,
     resultLimit,
   })
@@ -76,8 +99,68 @@ function formatDistance(distance: number): string {
   return distance.toFixed(1)
 }
 
+function formatElapsedTime(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1_000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  return minutes === 0
+    ? `${seconds}s`
+    : `${minutes}m ${seconds.toString().padStart(2, '0')}s`
+}
+
+function compareCandidates(
+  left: SeedSearchCandidate,
+  right: SeedSearchCandidate,
+): number {
+  const matchDifference =
+    right.matchedRequirementCount - left.matchedRequirementCount
+
+  if (matchDifference !== 0) {
+    return matchDifference
+  }
+
+  const distanceDifference =
+    left.averageNormalizedDistance -
+    right.averageNormalizedDistance
+
+  if (distanceDifference !== 0) {
+    return distanceDifference
+  }
+
+  const leftSeed = BigInt(left.seed)
+  const rightSeed = BigInt(right.seed)
+
+  return leftSeed < rightSeed ? -1 : leftSeed > rightSeed ? 1 : 0
+}
+
+function mergeCandidates(
+  current: SeedSearchCandidate[],
+  incoming: SeedSearchCandidate[],
+  resultLimit: number,
+): SeedSearchCandidate[] {
+  const candidates = new Map(
+    current.map((candidate) => [candidate.seed, candidate]),
+  )
+
+  for (const candidate of incoming) {
+    candidates.set(candidate.seed, candidate)
+  }
+
+  return [...candidates.values()]
+    .sort(compareCandidates)
+    .slice(0, resultLimit)
+}
+
+function completeMatchCount(
+  candidates: SeedSearchCandidate[],
+): number {
+  return candidates.filter(
+    (candidate) => candidate.matchesAllRequirements,
+  ).length
+}
+
 export function SeedFinderPanel({
-  seedRange,
   requirements,
 }: SeedFinderPanelProps) {
   const [resultLimit, setResultLimit] = useState('20')
@@ -86,9 +169,9 @@ export function SeedFinderPanel({
       fingerprint: '',
       state: idleState,
     })
+  const activeSession = useRef<SearchSession | null>(null)
 
   const fingerprint = requestFingerprint(
-    seedRange,
     requirements,
     resultLimit,
   )
@@ -98,37 +181,25 @@ export function SeedFinderPanel({
       ? requestState.state
       : idleState
 
+  useEffect(() => {
+    return () => {
+      if (activeSession.current !== null) {
+        activeSession.current.cancelled = true
+      }
+    }
+  }, [fingerprint])
+
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault()
 
     const submittedFingerprint = fingerprint
-
-    setRequestState({
-      fingerprint: submittedFingerprint,
-      state: { status: 'searching' },
-    })
+    const startedAt = performance.now()
+    let parsedResultLimit: number
 
     try {
-      const parsedResultLimit = parseResultLimit(resultLimit)
-      const request = createSeedSearchRequest(
-        seedRange,
-        requirements,
-        parsedResultLimit,
-      )
-      const result = await searchSeeds(request)
-
-      setRequestState({
-        fingerprint: submittedFingerprint,
-        state:
-          result === null
-            ? { status: 'browser' }
-            : {
-                status: 'result',
-                result,
-              },
-      })
+      parsedResultLimit = parseResultLimit(resultLimit)
     } catch (error) {
       setRequestState({
         fingerprint: submittedFingerprint,
@@ -137,8 +208,156 @@ export function SeedFinderPanel({
           message: errorMessage(error),
         },
       })
+      return
+    }
+
+    const session: SearchSession = {
+      fingerprint: submittedFingerprint,
+      cancelled: false,
+      progress: {
+        searchedSeedCount: 0,
+        candidates: [],
+        elapsedMilliseconds: 0,
+      },
+    }
+
+    activeSession.current = session
+    setRequestState({
+      fingerprint: submittedFingerprint,
+      state: {
+        status: 'searching',
+        progress: session.progress,
+        stopRequested: false,
+      },
+    })
+
+    try {
+      let nextSeed = createRandomSearchStart()
+
+      while (!session.cancelled) {
+        const request = createSeedSearchRequest(
+          nextSeed,
+          requirements,
+          parsedResultLimit,
+        )
+        const batchResult = await searchSeeds(request)
+
+        if (batchResult === null) {
+          if (activeSession.current === session) {
+            activeSession.current = null
+            setRequestState({
+              fingerprint: submittedFingerprint,
+              state: session.cancelled
+                ? {
+                    status: 'result',
+                    progress: session.progress,
+                    reason: 'stopped',
+                  }
+                : { status: 'browser' },
+            })
+          }
+          return
+        }
+
+        session.progress = {
+          searchedSeedCount:
+            session.progress.searchedSeedCount +
+            batchResult.searchedSeedCount,
+          candidates: mergeCandidates(
+            session.progress.candidates,
+            batchResult.candidates,
+            parsedResultLimit,
+          ),
+          elapsedMilliseconds: performance.now() - startedAt,
+        }
+
+        if (session.cancelled) {
+          if (activeSession.current === session) {
+            activeSession.current = null
+            setRequestState({
+              fingerprint: submittedFingerprint,
+              state: {
+                status: 'result',
+                progress: session.progress,
+                reason: 'stopped',
+              },
+            })
+          }
+          return
+        }
+
+        if (
+          completeMatchCount(session.progress.candidates) >=
+          parsedResultLimit
+        ) {
+          if (activeSession.current === session) {
+            activeSession.current = null
+            setRequestState({
+              fingerprint: submittedFingerprint,
+              state: {
+                status: 'result',
+                progress: session.progress,
+                reason: 'limit',
+              },
+            })
+          }
+          return
+        }
+
+        setRequestState({
+          fingerprint: submittedFingerprint,
+          state: {
+            status: 'searching',
+            progress: session.progress,
+            stopRequested: false,
+          },
+        })
+
+        nextSeed = nextSeedAfterBatch(request)
+      }
+    } catch (error) {
+      if (
+        !session.cancelled &&
+        activeSession.current === session
+      ) {
+        setRequestState({
+          fingerprint: submittedFingerprint,
+          state: {
+            status: 'error',
+            message: errorMessage(error),
+          },
+        })
+      }
+
+      if (activeSession.current === session) {
+        activeSession.current = null
+      }
     }
   }
+
+  function handleStop(): void {
+    const session = activeSession.current
+
+    if (session === null || session.cancelled) {
+      return
+    }
+
+    session.cancelled = true
+    setRequestState({
+      fingerprint: session.fingerprint,
+      state: {
+        status: 'searching',
+        progress: session.progress,
+        stopRequested: true,
+      },
+    })
+  }
+
+  const visibleProgress =
+    searchState.status === 'searching' ||
+    searchState.status === 'result'
+      ? searchState.progress
+      : null
 
   return (
     <section
@@ -148,27 +367,20 @@ export function SeedFinderPanel({
       <div className="seed-finder-heading">
         <div>
           <p className="section-label">Native seed finder</p>
-          <h2 id="seed-finder-title">
-            Find matching seeds
-          </h2>
+          <h2 id="seed-finder-title">Find matching seeds</h2>
         </div>
 
         <p className="seed-finder-description">
-          Search the configured inclusive seed range with the Java
-          engine and native Cubiomes locator.
+          Continuously scan the full signed 64-bit seed space with
+          the Java engine until enough seeds match every requirement.
         </p>
       </div>
 
-      <form
-        className="seed-finder-form"
-        onSubmit={handleSubmit}
-      >
+      <form className="seed-finder-form" onSubmit={handleSubmit}>
         <div className="seed-finder-summary">
           <div>
-            <span>Seed range</span>
-            <strong>
-              {seedRange.minimum} to {seedRange.maximum}
-            </strong>
+            <span>Search mode</span>
+            <strong>Continuous 64-bit scan</strong>
           </div>
 
           <div>
@@ -185,6 +397,7 @@ export function SeedFinderPanel({
             autoComplete="off"
             spellCheck={false}
             required
+            disabled={searchState.status === 'searching'}
             value={resultLimit}
             onChange={(event) => {
               setResultLimit(event.currentTarget.value)
@@ -192,18 +405,26 @@ export function SeedFinderPanel({
           />
         </label>
 
-        <button
-          className="seed-finder-submit"
-          type="submit"
-          disabled={
-            requirements.length === 0 ||
-            searchState.status === 'searching'
-          }
-        >
-          {searchState.status === 'searching'
-            ? 'Searching…'
-            : 'Search seeds'}
-        </button>
+        {searchState.status === 'searching' ? (
+          <button
+            className="seed-finder-stop"
+            type="button"
+            disabled={searchState.stopRequested}
+            onClick={handleStop}
+          >
+            {searchState.stopRequested
+              ? 'Stopping…'
+              : 'Stop search'}
+          </button>
+        ) : (
+          <button
+            className="seed-finder-submit"
+            type="submit"
+            disabled={requirements.length === 0}
+          >
+            Search seeds
+          </button>
+        )}
       </form>
 
       <div
@@ -213,24 +434,39 @@ export function SeedFinderPanel({
       >
         {searchState.status === 'idle' &&
           requirements.length === 0 && (
-            <p>
-              Add at least one search requirement to start.
-            </p>
+            <p>Add at least one search requirement to start.</p>
           )}
 
         {searchState.status === 'idle' &&
           requirements.length > 0 && (
-            <p>Ready to search with the native engine.</p>
+            <p>Ready to scan the full 64-bit seed space.</p>
           )}
 
         {searchState.status === 'searching' && (
-          <p>Searching the selected seed range…</p>
+          <p>
+            {searchState.stopRequested
+              ? 'Stopping after the current batch…'
+              : 'Searching continuously…'}{' '}
+            Checked{' '}
+            {numberFormatter.format(
+              searchState.progress.searchedSeedCount,
+            )}{' '}
+            seeds, found{' '}
+            {completeMatchCount(
+              searchState.progress.candidates,
+            )}
+            /{resultLimit} complete matches. Showing{' '}
+            {searchState.progress.candidates.length} best candidates
+            after{' '}
+            {formatElapsedTime(
+              searchState.progress.elapsedMilliseconds,
+            )}
+            .
+          </p>
         )}
 
         {searchState.status === 'browser' && (
-          <p>
-            Seed searches require the native Tauri application.
-          </p>
+          <p>Seed searches require the native Tauri application.</p>
         )}
 
         {searchState.status === 'error' && (
@@ -239,95 +475,96 @@ export function SeedFinderPanel({
 
         {searchState.status === 'result' && (
           <p>
-            Searched {searchState.result.searchedSeedCount} seeds and
-            found {searchState.result.candidates.length} candidates.
+            {searchState.reason === 'stopped'
+              ? 'Search stopped.'
+              : 'Result limit reached.'}{' '}
+            Checked{' '}
+            {numberFormatter.format(
+              searchState.progress.searchedSeedCount,
+            )}{' '}
+            seeds and found{' '}
+            {completeMatchCount(
+              searchState.progress.candidates,
+            )}
+            /{resultLimit} complete matches. Showing{' '}
+            {searchState.progress.candidates.length} best candidates
+            after{' '}
+            {formatElapsedTime(
+              searchState.progress.elapsedMilliseconds,
+            )}
+            .
           </p>
         )}
       </div>
 
       {searchState.status === 'result' &&
-        searchState.result.candidates.length === 0 && (
+        searchState.progress.candidates.length === 0 && (
           <p className="seed-finder-empty">
-            No seeds matched the configured requirements.
+            No candidates were found before the search stopped.
           </p>
         )}
 
-      {searchState.status === 'result' &&
-        searchState.result.candidates.length > 0 && (
+      {visibleProgress !== null &&
+        visibleProgress.candidates.length > 0 && (
           <ol className="seed-results">
-            {searchState.result.candidates.map(
-              (candidate, index) => (
-                <li
-                  className="seed-result-card"
-                  key={candidate.seed}
-                >
-                  <div className="seed-result-heading">
-                    <div>
-                      <span className="seed-result-rank">
-                        Result {index + 1}
-                      </span>
-                      <h3>Seed {candidate.seed}</h3>
-                    </div>
-
-                    <span
-                      className={
-                        candidate.matchesAllRequirements
-                          ? 'seed-result-badge seed-result-badge--complete'
-                          : 'seed-result-badge'
-                      }
-                    >
-                      {candidate.matchedRequirementCount}/
-                      {candidate.totalRequirementCount} matched
+            {visibleProgress.candidates.map((candidate, index) => (
+              <li className="seed-result-card" key={candidate.seed}>
+                <div className="seed-result-heading">
+                  <div>
+                    <span className="seed-result-rank">
+                      Result {index + 1}
                     </span>
+                    <h3>Seed {candidate.seed}</h3>
                   </div>
 
-                  <dl className="seed-result-metrics">
-                    <div>
-                      <dt>Match ratio</dt>
-                      <dd>
-                        {Math.round(
-                          candidate.matchRatio * 100,
-                        )}
-                        %
-                      </dd>
-                    </div>
+                  <span
+                    className={
+                      candidate.matchesAllRequirements
+                        ? 'seed-result-badge seed-result-badge--complete'
+                        : 'seed-result-badge'
+                    }
+                  >
+                    {candidate.matchedRequirementCount}/
+                    {candidate.totalRequirementCount} matched
+                  </span>
+                </div>
 
-                    <div>
-                      <dt>Average distance score</dt>
-                      <dd>
-                        {candidate.averageNormalizedDistance.toFixed(
-                          3,
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
+                <dl className="seed-result-metrics">
+                  <div>
+                    <dt>Match ratio</dt>
+                    <dd>{Math.round(candidate.matchRatio * 100)}%</dd>
+                  </div>
 
-                  <ul className="structure-matches">
-                    {candidate.matches.map((match) => (
-                      <li key={match.requirementId}>
-                        <div>
-                          <strong>Village</strong>
-                          <span>{match.requirementId}</span>
-                        </div>
+                  <div>
+                    <dt>Average distance score</dt>
+                    <dd>
+                      {candidate.averageNormalizedDistance.toFixed(3)}
+                    </dd>
+                  </div>
+                </dl>
 
-                        <p>
-                          X {match.actualPosition.x}, Z{' '}
-                          {match.actualPosition.z}
-                        </p>
+                <ul className="structure-matches">
+                  {candidate.matches.map((match) => (
+                    <li key={match.requirementId}>
+                      <div>
+                        <strong>Village</strong>
+                        <span>{match.requirementId}</span>
+                      </div>
 
-                        <span>
-                          Distance:{' '}
-                          {formatDistance(
-                            match.distanceBlocks,
-                          )}{' '}
-                          blocks
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ),
-            )}
+                      <p>
+                        X {match.actualPosition.x}, Z{' '}
+                        {match.actualPosition.z}
+                      </p>
+
+                      <span>
+                        Distance: {formatDistance(match.distanceBlocks)}{' '}
+                        blocks
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
           </ol>
         )}
     </section>
