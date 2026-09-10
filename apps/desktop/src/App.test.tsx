@@ -40,6 +40,12 @@ describe('App', () => {
         name: 'Search requirements',
       }),
     ).toBeInTheDocument()
+
+    expect(
+      screen.queryByRole('heading', {
+        name: 'Check a seed range',
+      }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the configured technology foundation', () => {

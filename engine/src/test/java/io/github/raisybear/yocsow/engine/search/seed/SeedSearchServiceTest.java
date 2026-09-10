@@ -13,6 +13,7 @@ import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegist
 import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -92,6 +93,48 @@ class SeedSearchServiceTest {
   }
 
   @Test
+  void assignsDistinctVillagesToRequirementsWithTheSameSearchArea() {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+    List<BlockPosition> villages =
+        List.of(
+            new BlockPosition(100, 0),
+            new BlockPosition(-200, 0),
+            new BlockPosition(0, 300),
+            new BlockPosition(0, -400));
+
+    for (int requirementIndex = 1; requirementIndex <= 4; requirementIndex++) {
+      String requirementId = "village-" + requirementIndex;
+
+      for (BlockPosition village : villages) {
+        locator.locate(42, requirementId, village);
+      }
+    }
+
+    SeedSearchResult result =
+        serviceUsing(locator)
+            .search(
+                new SeedSearchRequest(
+                    42,
+                    1,
+                    MinecraftVersion.JAVA_1_21,
+                    List.of(
+                        requirement("village-1"),
+                        requirement("village-2"),
+                        requirement("village-3"),
+                        requirement("village-4")),
+                    1));
+
+    SeedSearchCandidate candidate = result.candidates().getFirst();
+    List<BlockPosition> matchedVillages =
+        candidate.matches().stream().map(StructureMatch::actualPosition).toList();
+
+    assertEquals(4, candidate.matchedRequirementCount());
+    assertTrue(candidate.matchesAllRequirements());
+    assertEquals(4, new HashSet<>(matchedVillages).size());
+    assertEquals(new HashSet<>(villages), new HashSet<>(matchedVillages));
+  }
+
+  @Test
   void rejectsInvalidSearchLimits() {
     assertThrows(
         IllegalArgumentException.class,
@@ -162,10 +205,12 @@ class SeedSearchServiceTest {
 
   private static final class RecordingVillageLocator implements StructureLocator {
 
-    private final Map<SearchKey, BlockPosition> positions = new HashMap<>();
+    private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
 
     void locate(long seed, String requirementId, BlockPosition position) {
-      positions.put(new SearchKey(seed, requirementId), position);
+      positions
+          .computeIfAbsent(new SearchKey(seed, requirementId), ignored -> new ArrayList<>())
+          .add(position);
     }
 
     @Override
@@ -175,8 +220,16 @@ class SeedSearchServiceTest {
 
     @Override
     public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
-      return Optional.ofNullable(
-          positions.get(new SearchKey(request.seed(), request.requirement().id())));
+      return findNearestCandidates(request, 1).stream().findFirst();
+    }
+
+    @Override
+    public List<BlockPosition> findNearestCandidates(StructureSearchRequest request, int limit) {
+      return positions
+          .getOrDefault(new SearchKey(request.seed(), request.requirement().id()), List.of())
+          .stream()
+          .limit(limit)
+          .toList();
     }
   }
 

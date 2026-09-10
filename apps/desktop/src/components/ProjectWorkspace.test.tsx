@@ -9,10 +9,9 @@ import {
 import { useProjectWorkspace } from '../hooks/useProjectWorkspace'
 import { ProjectWorkspace } from './ProjectWorkspace'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
-import { SeedRangePanel } from './SeedRangePanel'
 
 vi.mock('../native/projects', () => ({
-  PROJECT_FORMAT_VERSION: 2,
+  PROJECT_FORMAT_VERSION: 3,
   openLocalProject: vi.fn(),
   saveLocalProject: vi.fn(),
   selectProjectSavePath: vi.fn(),
@@ -30,11 +29,6 @@ function WorkspaceHarness() {
   return (
     <>
       <ProjectWorkspace workspace={workspace} />
-
-      <SeedRangePanel
-        seedRange={workspace.project.seedRange}
-        onChange={workspace.updateSeedRange}
-      />
 
       <SearchRequirementsPanel
         requirements={workspace.project.searchRequirements}
@@ -92,13 +86,8 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Loaded world.yocsow',
         project: {
-          formatVersion: 2,
+          formatVersion: 3,
           name: 'Loaded world',
-          seedRange: {
-            minimum: '-100',
-            maximum: '100',
-            seed: '42',
-          },
           searchRequirements: [
             {
               kind: 'structure',
@@ -127,9 +116,6 @@ describe('ProjectWorkspace', () => {
       await screen.findByDisplayValue('Loaded world'),
     ).toBeInTheDocument()
 
-    expect(screen.getByLabelText('Minimum')).toHaveValue('-100')
-    expect(screen.getByLabelText('Maximum')).toHaveValue('100')
-    expect(screen.getByLabelText('Seed')).toHaveValue('42')
     expect(screen.getByLabelText('X coordinate')).toHaveValue('120')
     expect(screen.getByLabelText('Z coordinate')).toHaveValue('-340')
     expect(screen.getByLabelText('Radius in blocks')).toHaveValue(
@@ -168,13 +154,8 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Survival world.yocsow',
       {
-        formatVersion: 2,
+        formatVersion: 3,
         name: 'Survival world',
-        seedRange: {
-          minimum: '-10',
-          maximum: '10',
-          seed: '0',
-        },
         searchRequirements: [],
       },
     )
@@ -235,13 +216,8 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Village search.yocsow',
       {
-        formatVersion: 2,
+        formatVersion: 3,
         name: 'Village search',
-        seedRange: {
-          minimum: '-10',
-          maximum: '10',
-          seed: '0',
-        },
         searchRequirements: [
           {
             kind: 'structure',
@@ -270,13 +246,8 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Existing.yocsow',
         project: {
-          formatVersion: 2,
+          formatVersion: 3,
           name: 'Existing',
-          seedRange: {
-            minimum: '0',
-            maximum: '100',
-            seed: '50',
-          },
           searchRequirements: [],
         },
       },
@@ -290,10 +261,10 @@ describe('ProjectWorkspace', () => {
       }),
     )
 
-    const seed = await screen.findByLabelText('Seed')
+    const projectName = await screen.findByLabelText('Project name')
 
-    await user.clear(seed)
-    await user.type(seed, '75')
+    await user.clear(projectName)
+    await user.type(projectName, 'Existing updated')
 
     await user.click(
       screen.getByRole('button', {
@@ -306,13 +277,8 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Existing.yocsow',
       {
-        formatVersion: 2,
-        name: 'Existing',
-        seedRange: {
-          minimum: '0',
-          maximum: '100',
-          seed: '75',
-        },
+        formatVersion: 3,
+        name: 'Existing updated',
         searchRequirements: [],
       },
     )
@@ -330,13 +296,8 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Original.yocsow',
         project: {
-          formatVersion: 2,
+          formatVersion: 3,
           name: 'Original',
-          seedRange: {
-            minimum: '-10',
-            maximum: '10',
-            seed: '0',
-          },
           searchRequirements: [],
         },
       },
@@ -364,13 +325,8 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Copy.yocsow',
       {
-        formatVersion: 2,
+        formatVersion: 3,
         name: 'Original',
-        seedRange: {
-          minimum: '-10',
-          maximum: '10',
-          seed: '0',
-        },
         searchRequirements: [],
       },
     )
@@ -401,9 +357,6 @@ describe('ProjectWorkspace', () => {
 
     expect(confirmMock).toHaveBeenCalled()
     expect(projectName).toHaveValue('Untitled project')
-    expect(screen.getByLabelText('Minimum')).toHaveValue('-10')
-    expect(screen.getByLabelText('Maximum')).toHaveValue('10')
-    expect(screen.getByLabelText('Seed')).toHaveValue('0')
     expect(screen.getByText('New project')).toBeInTheDocument()
 
     confirmMock.mockRestore()

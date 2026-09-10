@@ -8,16 +8,18 @@ import io.github.raisybear.yocsow.engine.search.StructureRequirement;
 import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocator;
 import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
 public final class CubiomesVillageLocator implements StructureLocator {
 
   private static final int NATIVE_JAVA_1_21 = 1;
-  private static final long RESULT_FOUND_OFFSET = 0;
-  private static final long RESULT_X_OFFSET = Integer.BYTES;
-  private static final long RESULT_Z_OFFSET = Integer.BYTES * 2L;
-  private static final long RESULT_SIZE = Integer.BYTES * 3L;
+  private static final int MAXIMUM_RESULTS = 64;
+  private static final long POSITION_X_OFFSET = 0;
+  private static final long POSITION_Z_OFFSET = Integer.BYTES;
+  private static final long POSITION_SIZE = Integer.BYTES * 2L;
 
   private final CubiomesNativeLibrary nativeLibrary;
 
@@ -36,7 +38,17 @@ public final class CubiomesVillageLocator implements StructureLocator {
 
   @Override
   public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+    return findNearestCandidates(request, 1).stream().findFirst();
+  }
+
+  @Override
+  public List<BlockPosition> findNearestCandidates(StructureSearchRequest request, int limit) {
     Objects.requireNonNull(request, "request");
+
+    if (limit <= 0 || limit > MAXIMUM_RESULTS) {
+      throw new IllegalArgumentException(
+          "village result limit must be between 1 and " + MAXIMUM_RESULTS);
+    }
 
     StructureRequirement requirement = request.requirement();
 
@@ -46,21 +58,25 @@ public final class CubiomesVillageLocator implements StructureLocator {
               + requirement.structureType().identifier());
     }
 
-    try (Memory result = new Memory(RESULT_SIZE)) {
-      result.clear();
+    try (Memory resultCount = new Memory(Integer.BYTES);
+        Memory results = new Memory(POSITION_SIZE * limit)) {
+      resultCount.clear();
+      results.clear();
 
       int status =
-          nativeLibrary.findNearestVillage(
+          nativeLibrary.findVillages(
               nativeMinecraftVersion(request.minecraftVersion()),
               request.seed(),
               requirement.center().x(),
               requirement.center().z(),
               requirement.radiusBlocks(),
-              result);
+              limit,
+              resultCount,
+              results);
 
       requireSuccessfulStatus(status, request.minecraftVersion());
 
-      return readResult(result);
+      return readResults(resultCount, results, limit);
     }
   }
 
@@ -88,17 +104,25 @@ public final class CubiomesVillageLocator implements StructureLocator {
     }
   }
 
-  private Optional<BlockPosition> readResult(Pointer result) {
-    int found = result.getInt(RESULT_FOUND_OFFSET);
+  private List<BlockPosition> readResults(Pointer resultCount, Pointer results, int limit) {
+    int count = resultCount.getInt(0);
 
-    return switch (found) {
-      case 0 -> Optional.empty();
-      case 1 ->
-          Optional.of(
-              new BlockPosition(result.getInt(RESULT_X_OFFSET), result.getInt(RESULT_Z_OFFSET)));
-      default ->
-          throw new IllegalStateException(
-              "native village locator returned invalid found value: " + found);
-    };
+    if (count < 0 || count > limit) {
+      throw new IllegalStateException(
+          "native village locator returned invalid result count: " + count);
+    }
+
+    List<BlockPosition> positions = new ArrayList<>(count);
+
+    for (int index = 0; index < count; index++) {
+      long offset = POSITION_SIZE * index;
+
+      positions.add(
+          new BlockPosition(
+              results.getInt(offset + POSITION_X_OFFSET),
+              results.getInt(offset + POSITION_Z_OFFSET)));
+    }
+
+    return List.copyOf(positions);
   }
 }

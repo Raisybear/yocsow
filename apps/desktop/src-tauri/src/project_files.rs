@@ -6,8 +6,9 @@ use std::fmt::{self, Display, Formatter};
 use std::fs;
 use std::path::Path;
 
-const LEGACY_PROJECT_FORMAT_VERSION: u32 = 1;
-const PROJECT_FORMAT_VERSION: u32 = 2;
+const VERSION_ONE_PROJECT_FORMAT: u32 = 1;
+const VERSION_TWO_PROJECT_FORMAT: u32 = 2;
+const PROJECT_FORMAT_VERSION: u32 = 3;
 const PROJECT_EXTENSION: &str = "yocsow";
 const MAX_PROJECT_FILE_SIZE: usize = 1024 * 1024;
 const MAX_PROJECT_NAME_LENGTH: usize = 120;
@@ -20,16 +21,18 @@ const MAX_SEARCH_RADIUS_BLOCKS: u64 = 60_000_000;
 pub struct ProjectDocument {
     format_version: u32,
     name: String,
-    seed_range: ProjectSeedRange,
     search_requirements: Vec<ProjectSearchRequirement>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct ProjectSeedRange {
-    minimum: String,
-    maximum: String,
-    seed: String,
+struct DiscardedSeedRange {
+    #[serde(rename = "minimum")]
+    _minimum: String,
+    #[serde(rename = "maximum")]
+    _maximum: String,
+    #[serde(rename = "seed")]
+    _seed: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,21 +64,43 @@ pub struct ProjectBlockPosition {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct LegacyProjectDocument {
+struct VersionOneProjectDocument {
     format_version: u32,
     name: String,
-    seed_range: ProjectSeedRange,
+    #[serde(rename = "seedRange")]
+    _seed_range: DiscardedSeedRange,
 }
 
-impl LegacyProjectDocument {
+impl VersionOneProjectDocument {
     fn migrate(self) -> ProjectDocument {
-        debug_assert_eq!(self.format_version, LEGACY_PROJECT_FORMAT_VERSION);
+        debug_assert_eq!(self.format_version, VERSION_ONE_PROJECT_FORMAT);
 
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
-            seed_range: self.seed_range,
             search_requirements: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VersionTwoProjectDocument {
+    format_version: u32,
+    name: String,
+    #[serde(rename = "seedRange")]
+    _seed_range: DiscardedSeedRange,
+    search_requirements: Vec<ProjectSearchRequirement>,
+}
+
+impl VersionTwoProjectDocument {
+    fn migrate(self) -> ProjectDocument {
+        debug_assert_eq!(self.format_version, VERSION_TWO_PROJECT_FORMAT);
+
+        ProjectDocument {
+            format_version: PROJECT_FORMAT_VERSION,
+            name: self.name,
+            search_requirements: self.search_requirements,
         }
     }
 }
@@ -101,16 +126,6 @@ impl ProjectDocument {
             return Err(ProjectFileError::Validation(format!(
                 "project name must not exceed {MAX_PROJECT_NAME_LENGTH} characters"
             )));
-        }
-
-        let minimum = parse_signed_64_bit_integer("minimum", &self.seed_range.minimum)?;
-        let maximum = parse_signed_64_bit_integer("maximum", &self.seed_range.maximum)?;
-        parse_signed_64_bit_integer("seed", &self.seed_range.seed)?;
-
-        if minimum > maximum {
-            return Err(ProjectFileError::Validation(
-                "minimum must not be greater than maximum".into(),
-            ));
         }
 
         if self.search_requirements.len() > MAX_SEARCH_REQUIREMENTS {
@@ -194,9 +209,13 @@ pub(crate) fn load_project(path: &Path) -> Result<ProjectDocument, ProjectFileEr
         })?;
 
     let project = match format_version {
-        version if version == u64::from(LEGACY_PROJECT_FORMAT_VERSION) => {
-            let legacy_project: LegacyProjectDocument = serde_json::from_value(value)?;
-            legacy_project.migrate()
+        version if version == u64::from(VERSION_ONE_PROJECT_FORMAT) => {
+            let project: VersionOneProjectDocument = serde_json::from_value(value)?;
+            project.migrate()
+        }
+        version if version == u64::from(VERSION_TWO_PROJECT_FORMAT) => {
+            let project: VersionTwoProjectDocument = serde_json::from_value(value)?;
+            project.migrate()
         }
         version if version == u64::from(PROJECT_FORMAT_VERSION) => serde_json::from_value(value)?,
         unsupported_version => {
@@ -253,12 +272,6 @@ fn validate_project_path(path: &Path) -> Result<(), ProjectFileError> {
     Ok(())
 }
 
-fn parse_signed_64_bit_integer(parameter: &str, value: &str) -> Result<i64, ProjectFileError> {
-    value.trim().parse::<i64>().map_err(|_| {
-        ProjectFileError::Validation(format!("{parameter} must be a signed 64-bit integer"))
-    })
-}
-
 #[derive(Debug)]
 pub(crate) enum ProjectFileError {
     Io(std::io::Error),
@@ -293,9 +306,9 @@ impl From<serde_json::Error> for ProjectFileError {
 #[cfg(test)]
 mod tests {
     use super::{
-        LEGACY_PROJECT_FORMAT_VERSION, PROJECT_FORMAT_VERSION, ProjectBlockPosition,
-        ProjectDocument, ProjectSearchRequirement, ProjectSeedRange, ProjectStructureType,
-        load_project, save_project,
+        PROJECT_FORMAT_VERSION, ProjectBlockPosition, ProjectDocument, ProjectSearchRequirement,
+        ProjectStructureType, VERSION_ONE_PROJECT_FORMAT, VERSION_TWO_PROJECT_FORMAT, load_project,
+        save_project,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -314,7 +327,8 @@ mod tests {
         let loaded = load_project(&path).expect("project should be loaded");
 
         assert!(contents.ends_with('\n'));
-        assert!(contents.contains(r#""formatVersion": 2"#));
+        assert!(contents.contains(r#""formatVersion": 3"#));
+        assert!(!contents.contains(r#""seedRange""#));
         assert!(contents.contains(r#""searchRequirements": []"#));
         assert_eq!(loaded, project);
 
@@ -348,7 +362,7 @@ mod tests {
             &path,
             format!(
                 r#"{{
-                  "formatVersion": {LEGACY_PROJECT_FORMAT_VERSION},
+                  "formatVersion": {VERSION_ONE_PROJECT_FORMAT},
                   "name": "Legacy world",
                   "seedRange": {{
                     "minimum": "-10",
@@ -370,6 +384,42 @@ mod tests {
     }
 
     #[test]
+    fn migrates_version_two_projects_and_keeps_requirements() {
+        let path = test_path("range-project.yocsow");
+
+        fs::write(
+            &path,
+            format!(
+                r#"{{
+                  "formatVersion": {VERSION_TWO_PROJECT_FORMAT},
+                  "name": "Village search",
+                  "seedRange": {{
+                    "minimum": "-1000",
+                    "maximum": "1000",
+                    "seed": "0"
+                  }},
+                  "searchRequirements": [{{
+                    "kind": "structure",
+                    "id": "village-1",
+                    "structureType": "village",
+                    "center": {{ "x": 120, "z": -340 }},
+                    "radiusBlocks": 1000
+                  }}]
+                }}"#
+            ),
+        )
+        .expect("version two project should be written");
+
+        let migrated = load_project(&path).expect("version two project should be migrated");
+
+        assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.name, "Village search");
+        assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
     fn rejects_unsupported_format_versions() {
         let path = test_path("future.yocsow");
         let mut project = sample_project();
@@ -382,25 +432,6 @@ mod tests {
             error
                 .to_string()
                 .contains("unsupported project format version")
-        );
-
-        remove_test_directory(&path);
-    }
-
-    #[test]
-    fn rejects_invalid_seed_ranges() {
-        let path = test_path("invalid-range.yocsow");
-        let mut project = sample_project();
-        project.seed_range.minimum = "10".into();
-        project.seed_range.maximum = "0".into();
-
-        let error =
-            save_project(&path, &project).expect_err("invalid seed ranges should be rejected");
-
-        assert!(
-            error
-                .to_string()
-                .contains("minimum must not be greater than maximum")
         );
 
         remove_test_directory(&path);
@@ -463,13 +494,8 @@ mod tests {
         fs::write(
             &path,
             r#"{
-              "formatVersion": 2,
+              "formatVersion": 3,
               "name": "Unknown field",
-              "seedRange": {
-                "minimum": "-10",
-                "maximum": "10",
-                "seed": "0"
-              },
               "searchRequirements": [],
               "unexpected": true
             }"#,
@@ -487,11 +513,6 @@ mod tests {
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: "Example world".into(),
-            seed_range: ProjectSeedRange {
-                minimum: "-10".into(),
-                maximum: "10".into(),
-                seed: "0".into(),
-            },
             search_requirements: Vec::new(),
         }
     }

@@ -92,7 +92,8 @@
   box-shadow: 0 0 0 0.2rem rgb(84 214 146 / 15%);
 }
 
-.seed-finder-submit {
+.seed-finder-submit,
+.seed-finder-stop {
   min-height: 2.8rem;
   padding: 0.65rem 1rem;
   border: 1px solid #54d692;
@@ -105,20 +106,35 @@
   cursor: pointer;
 }
 
-.seed-finder-submit:hover:not(:disabled) {
+.seed-finder-submit:hover:not(:disabled),
+.seed-finder-stop:hover:not(:disabled) {
   border-color: #8ce5b8;
   background: #8ce5b8;
   transform: translateY(-1px);
 }
 
-.seed-finder-submit:focus-visible {
+.seed-finder-submit:focus-visible,
+.seed-finder-stop:focus-visible {
   outline: 0.2rem solid rgb(84 214 146 / 35%);
   outline-offset: 0.15rem;
 }
 
-.seed-finder-submit:disabled {
+.seed-finder-submit:disabled,
+.seed-finder-stop:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.seed-finder-stop {
+  border-color: rgb(255 107 107 / 75%);
+  color: #ffb0b0;
+  background: rgb(112 39 39 / 32%);
+}
+
+.seed-finder-stop:hover:not(:disabled) {
+  border-color: #ff9191;
+  color: #07110c;
+  background: #ff9191;
 }
 
 .seed-finder-status,
@@ -289,7 +305,8 @@
     grid-template-columns: 1fr;
   }
 
-  .seed-finder-submit {
+  .seed-finder-submit,
+  .seed-finder-stop {
     width: 100%;
   }
 }

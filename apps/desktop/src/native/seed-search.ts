@@ -3,7 +3,6 @@ import type {
   SearchRequirement,
   StructureType,
 } from '../domain/search-requirements'
-import type { SeedRangeQuery } from './seed-range'
 
 const MINIMUM_SIGNED_64_BIT_INTEGER = BigInt(
   '-9223372036854775808',
@@ -11,7 +10,7 @@ const MINIMUM_SIGNED_64_BIT_INTEGER = BigInt(
 const MAXIMUM_SIGNED_64_BIT_INTEGER = BigInt(
   '9223372036854775807',
 )
-const MAXIMUM_SEEDS_PER_BATCH = 10_000
+export const MAXIMUM_SEEDS_PER_BATCH = 10_000
 const MAXIMUM_RESULTS = 100
 
 export interface SeedSearchPosition {
@@ -97,32 +96,26 @@ function validateResultLimit(resultLimit: number): void {
   }
 }
 
+export function createRandomSearchStart(): bigint {
+  const words = new Uint32Array(2)
+  globalThis.crypto.getRandomValues(words)
+
+  const unsignedSeed =
+    (BigInt(words[0]) << BigInt(32)) | BigInt(words[1])
+
+  return BigInt.asIntN(64, unsignedSeed)
+}
+
 export function createSeedSearchRequest(
-  seedRange: SeedRangeQuery,
+  firstSeed: bigint,
   requirements: SearchRequirement[],
   resultLimit: number,
 ): SeedSearchRequest {
-  const minimum = parseSigned64BitInteger(
-    'Minimum seed',
-    seedRange.minimum,
-  )
-  const maximum = parseSigned64BitInteger(
-    'Maximum seed',
-    seedRange.maximum,
-  )
-
-  if (minimum > maximum) {
-    throw new Error(
-      'Minimum seed must not be greater than maximum seed.',
-    )
-  }
-
-  const seedCount = maximum - minimum + BigInt(1)
-
-  if (seedCount > BigInt(MAXIMUM_SEEDS_PER_BATCH)) {
-    throw new Error(
-      `Seed range must not contain more than ${MAXIMUM_SEEDS_PER_BATCH} seeds.`,
-    )
+  if (
+    firstSeed < MINIMUM_SIGNED_64_BIT_INTEGER ||
+    firstSeed > MAXIMUM_SIGNED_64_BIT_INTEGER
+  ) {
+    throw new Error('First seed must be a signed 64-bit integer.')
   }
 
   if (requirements.length === 0) {
@@ -133,9 +126,17 @@ export function createSeedSearchRequest(
 
   validateResultLimit(resultLimit)
 
+  const availableSeeds =
+    MAXIMUM_SIGNED_64_BIT_INTEGER - firstSeed + BigInt(1)
+  const seedCount = Number(
+    availableSeeds < BigInt(MAXIMUM_SEEDS_PER_BATCH)
+      ? availableSeeds
+      : BigInt(MAXIMUM_SEEDS_PER_BATCH),
+  )
+
   return {
-    firstSeed: minimum.toString(),
-    seedCount: Number(seedCount),
+    firstSeed: firstSeed.toString(),
+    seedCount,
     minecraftVersion: '1.21',
     requirements: requirements.map((requirement) => ({
       id: requirement.id,
@@ -148,6 +149,20 @@ export function createSeedSearchRequest(
     })),
     resultLimit,
   }
+}
+
+export function nextSeedAfterBatch(
+  request: SeedSearchRequest,
+): bigint {
+  const firstSeed = parseSigned64BitInteger(
+    'First seed',
+    request.firstSeed,
+  )
+  const nextSeed = firstSeed + BigInt(request.seedCount)
+
+  return nextSeed > MAXIMUM_SIGNED_64_BIT_INTEGER
+    ? MINIMUM_SIGNED_64_BIT_INTEGER
+    : nextSeed
 }
 
 export async function searchSeeds(

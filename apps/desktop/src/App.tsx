@@ -1,7 +1,6 @@
 import { ProjectWorkspace } from './components/ProjectWorkspace'
 import { SearchRequirementsPanel } from './components/SearchRequirementsPanel'
 import { SeedFinderPanel } from './components/SeedFinderPanel'
-import { SeedRangePanel } from './components/SeedRangePanel'
 import { SystemStatus } from './components/SystemStatus'
 import { useProjectWorkspace } from './hooks/useProjectWorkspace'
 import './App.css'
@@ -49,13 +48,7 @@ function App() {
           onChange={workspace.updateSearchRequirements}
         />
 
-        <SeedRangePanel
-          seedRange={workspace.project.seedRange}
-          onChange={workspace.updateSeedRange}
-        />
-
         <SeedFinderPanel
-          seedRange={workspace.project.seedRange}
           requirements={workspace.project.searchRequirements}
         />
 
