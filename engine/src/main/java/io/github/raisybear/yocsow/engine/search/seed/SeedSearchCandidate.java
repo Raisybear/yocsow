@@ -1,5 +1,7 @@
 package io.github.raisybear.yocsow.engine.search.seed;
 
+import io.github.raisybear.yocsow.engine.search.BlockPosition;
+import io.github.raisybear.yocsow.engine.search.StructureType;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -22,6 +24,7 @@ public record SeedSearchCandidate(
 
     List<StructureMatch> copiedMatches = new ArrayList<>(matches.size());
     Set<String> requirementIds = new HashSet<>();
+    Set<MatchedStructure> matchedStructures = new HashSet<>();
 
     for (StructureMatch match : matches) {
       StructureMatch nonNullMatch = Objects.requireNonNull(match, "match");
@@ -29,6 +32,17 @@ public record SeedSearchCandidate(
       if (!requirementIds.add(nonNullMatch.requirementId())) {
         throw new IllegalArgumentException(
             "duplicate matched requirement id: " + nonNullMatch.requirementId());
+      }
+
+      MatchedStructure matchedStructure =
+          new MatchedStructure(nonNullMatch.structureType(), nonNullMatch.actualPosition());
+
+      if (!matchedStructures.add(matchedStructure)) {
+        throw new IllegalArgumentException(
+            "duplicate matched structure: "
+                + nonNullMatch.structureType().identifier()
+                + " at "
+                + nonNullMatch.actualPosition());
       }
 
       copiedMatches.add(nonNullMatch);
@@ -55,4 +69,6 @@ public record SeedSearchCandidate(
         .average()
         .orElse(Double.POSITIVE_INFINITY);
   }
+
+  private record MatchedStructure(StructureType structureType, BlockPosition position) {}
 }

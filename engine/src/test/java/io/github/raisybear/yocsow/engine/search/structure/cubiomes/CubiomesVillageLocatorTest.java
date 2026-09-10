@@ -9,6 +9,7 @@ import io.github.raisybear.yocsow.engine.search.MinecraftVersion;
 import io.github.raisybear.yocsow.engine.search.StructureRequirement;
 import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
@@ -39,20 +40,19 @@ class CubiomesVillageLocatorTest {
   void forwardsSearchRequestsAndReturnsVillagePositions() {
     RecordingNativeLibrary nativeLibrary = new RecordingNativeLibrary();
 
-    nativeLibrary.found = 1;
-    nativeLibrary.resultX = 656;
-    nativeLibrary.resultZ = -304;
+    nativeLibrary.positions = List.of(new BlockPosition(656, -304), new BlockPosition(-752, 416));
 
     CubiomesVillageLocator locator = new CubiomesVillageLocator(nativeLibrary);
 
-    Optional<BlockPosition> result = locator.findNearest(villageRequest());
+    List<BlockPosition> result = locator.findNearestCandidates(villageRequest(), 2);
 
-    assertEquals(Optional.of(new BlockPosition(656, -304)), result);
+    assertEquals(nativeLibrary.positions, result);
     assertEquals(1, nativeLibrary.minecraftVersion);
     assertEquals(42, nativeLibrary.seed);
     assertEquals(100, nativeLibrary.centerX);
     assertEquals(-200, nativeLibrary.centerZ);
     assertEquals(1_000, nativeLibrary.radiusBlocks);
+    assertEquals(2, nativeLibrary.resultCapacity);
   }
 
   @Test
@@ -82,14 +82,15 @@ class CubiomesVillageLocatorTest {
   void rejectsInvalidNativeResultFlags() {
     RecordingNativeLibrary nativeLibrary = new RecordingNativeLibrary();
 
-    nativeLibrary.found = 2;
+    nativeLibrary.resultCountOverride = 2;
 
     CubiomesVillageLocator locator = new CubiomesVillageLocator(nativeLibrary);
 
     IllegalStateException error =
-        assertThrows(IllegalStateException.class, () -> locator.findNearest(villageRequest()));
+        assertThrows(
+            IllegalStateException.class, () -> locator.findNearestCandidates(villageRequest(), 1));
 
-    assertEquals("native village locator returned invalid found value: 2", error.getMessage());
+    assertEquals("native village locator returned invalid result count: 2", error.getMessage());
   }
 
   private StructureSearchRequest villageRequest() {
@@ -103,32 +104,42 @@ class CubiomesVillageLocatorTest {
   private static final class RecordingNativeLibrary implements CubiomesNativeLibrary {
 
     private int status = STATUS_OK;
-    private int found;
-    private int resultX;
-    private int resultZ;
+    private List<BlockPosition> positions = List.of();
+    private Integer resultCountOverride;
     private int minecraftVersion;
     private long seed;
     private long centerX;
     private long centerZ;
     private long radiusBlocks;
+    private int resultCapacity;
 
     @Override
-    public int findNearestVillage(
+    public int findVillages(
         int minecraftVersion,
         long seed,
         long centerX,
         long centerZ,
         long radiusBlocks,
-        Pointer result) {
+        int resultCapacity,
+        Pointer resultCount,
+        Pointer results) {
       this.minecraftVersion = minecraftVersion;
       this.seed = seed;
       this.centerX = centerX;
       this.centerZ = centerZ;
       this.radiusBlocks = radiusBlocks;
+      this.resultCapacity = resultCapacity;
 
-      result.setInt(0, found);
-      result.setInt(Integer.BYTES, resultX);
-      result.setInt(Integer.BYTES * 2L, resultZ);
+      int count = Math.min(positions.size(), resultCapacity);
+      resultCount.setInt(0, resultCountOverride == null ? count : resultCountOverride);
+
+      for (int index = 0; index < count; index++) {
+        long offset = Integer.BYTES * 2L * index;
+        BlockPosition position = positions.get(index);
+
+        results.setInt(offset, Math.toIntExact(position.x()));
+        results.setInt(offset + Integer.BYTES, Math.toIntExact(position.z()));
+      }
 
       return status;
     }

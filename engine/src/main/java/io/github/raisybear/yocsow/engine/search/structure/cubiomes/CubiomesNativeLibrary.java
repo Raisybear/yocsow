@@ -17,7 +17,7 @@ interface CubiomesNativeLibrary extends Library {
     FunctionMapper functionMapper =
         (nativeLibrary, method) ->
             switch (method.getName()) {
-              case "findNearestVillage" -> "yocsow_find_nearest_village";
+              case "findVillages" -> "yocsow_find_villages";
               default -> method.getName();
             };
 
@@ -27,11 +27,13 @@ interface CubiomesNativeLibrary extends Library {
         Map.of(Library.OPTION_FUNCTION_MAPPER, functionMapper));
   }
 
-  int findNearestVillage(
+  int findVillages(
       int minecraftVersion,
       long seed,
       long centerX,
       long centerZ,
       long radiusBlocks,
-      Pointer result);
+      int resultCapacity,
+      Pointer resultCount,
+      Pointer results);
 }

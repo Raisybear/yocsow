@@ -2,7 +2,6 @@
 
 #include "finders.h"
 
-#include <limits.h>
 #include <stdint.h>
 
 #define YOCSOW_MAX_BLOCK_COORDINATE 30000000
@@ -56,24 +55,97 @@ static int search_area_is_valid(
              YOCSOW_MAX_BLOCK_COORDINATE;
 }
 
+static int64_t distance_squared(
+    int64_t center_x,
+    int64_t center_z,
+    const Pos *position) {
+  int64_t delta_x =
+      (int64_t)position->x - center_x;
+
+  int64_t delta_z =
+      (int64_t)position->z - center_z;
+
+  return delta_x * delta_x +
+         delta_z * delta_z;
+}
+
 static int candidate_is_better(
-    int found,
-    int64_t distance_squared,
-    int64_t best_distance_squared,
+    int64_t center_x,
+    int64_t center_z,
     const Pos *candidate,
-    const struct YocsowVillageResult *result) {
-  if (!found ||
-      distance_squared < best_distance_squared) {
+    const struct YocsowBlockPosition *existing) {
+  int64_t candidate_distance =
+      distance_squared(center_x, center_z, candidate);
+
+  Pos existing_position = {
+      existing->x,
+      existing->z};
+
+  int64_t existing_distance =
+      distance_squared(
+          center_x,
+          center_z,
+          &existing_position);
+
+  if (candidate_distance < existing_distance) {
     return 1;
   }
 
-  if (distance_squared > best_distance_squared) {
+  if (candidate_distance > existing_distance) {
     return 0;
   }
 
-  return candidate->x < result->x ||
-         (candidate->x == result->x &&
-          candidate->z < result->z);
+  return candidate->x < existing->x ||
+         (candidate->x == existing->x &&
+          candidate->z < existing->z);
+}
+
+static void insert_candidate(
+    int64_t center_x,
+    int64_t center_z,
+    const Pos *candidate,
+    int32_t result_capacity,
+    int32_t *result_count,
+    struct YocsowBlockPosition *results) {
+  for (int32_t index = 0;
+       index < *result_count;
+       index++) {
+    if (results[index].x == candidate->x &&
+        results[index].z == candidate->z) {
+      return;
+    }
+  }
+
+  int32_t insertion_index = 0;
+
+  while (insertion_index < *result_count &&
+         !candidate_is_better(
+             center_x,
+             center_z,
+             candidate,
+             &results[insertion_index])) {
+    insertion_index++;
+  }
+
+  if (insertion_index >= result_capacity) {
+    return;
+  }
+
+  int32_t new_count = *result_count;
+
+  if (new_count < result_capacity) {
+    new_count++;
+  }
+
+  for (int32_t index = new_count - 1;
+       index > insertion_index;
+       index--) {
+    results[index] = results[index - 1];
+  }
+
+  results[insertion_index].x = candidate->x;
+  results[insertion_index].z = candidate->z;
+  *result_count = new_count;
 }
 
 int32_t yocsow_find_nearest_village(
@@ -90,6 +162,50 @@ int32_t yocsow_find_nearest_village(
   result->found = 0;
   result->x = 0;
   result->z = 0;
+
+  int32_t result_count = 0;
+  struct YocsowBlockPosition position;
+
+  int32_t status =
+      yocsow_find_villages(
+          minecraft_version,
+          seed,
+          center_x,
+          center_z,
+          radius_blocks,
+          1,
+          &result_count,
+          &position);
+
+  if (status != YOCSOW_CUBIOMES_OK ||
+      result_count == 0) {
+    return status;
+  }
+
+  result->found = 1;
+  result->x = position.x;
+  result->z = position.z;
+
+  return YOCSOW_CUBIOMES_OK;
+}
+
+int32_t yocsow_find_villages(
+    int32_t minecraft_version,
+    int64_t seed,
+    int64_t center_x,
+    int64_t center_z,
+    int64_t radius_blocks,
+    int32_t result_capacity,
+    int32_t *result_count,
+    struct YocsowBlockPosition *results) {
+  if (result_count == NULL ||
+      results == NULL ||
+      result_capacity <= 0 ||
+      result_capacity > YOCSOW_MAX_VILLAGE_RESULTS) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
+  *result_count = 0;
 
   int mc = cubiomes_version(minecraft_version);
 
@@ -151,9 +267,6 @@ int32_t yocsow_find_nearest_village(
   int64_t maximum_distance_squared =
       radius_blocks * radius_blocks;
 
-  int64_t best_distance_squared =
-      INT64_MAX;
-
   for (int32_t region_x = minimum_region_x;
        region_x <= maximum_region_x;
        region_x++) {
@@ -172,24 +285,20 @@ int32_t yocsow_find_nearest_village(
         continue;
       }
 
-      int64_t delta_x =
-          (int64_t)candidate.x - center_x;
+      if (distance_squared(
+              center_x,
+              center_z,
+              &candidate) >
+          maximum_distance_squared) {
+        continue;
+      }
 
-      int64_t delta_z =
-          (int64_t)candidate.z - center_z;
-
-      int64_t distance_squared =
-          delta_x * delta_x +
-          delta_z * delta_z;
-
-      if (distance_squared >
-              maximum_distance_squared ||
+      if (*result_count == result_capacity &&
           !candidate_is_better(
-              result->found,
-              distance_squared,
-              best_distance_squared,
+              center_x,
+              center_z,
               &candidate,
-              result)) {
+              &results[result_capacity - 1])) {
         continue;
       }
 
@@ -202,10 +311,13 @@ int32_t yocsow_find_nearest_village(
         continue;
       }
 
-      result->found = 1;
-      result->x = candidate.x;
-      result->z = candidate.z;
-      best_distance_squared = distance_squared;
+      insert_candidate(
+          center_x,
+          center_z,
+          &candidate,
+          result_capacity,
+          result_count,
+          results);
     }
   }
 

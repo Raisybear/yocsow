@@ -29,6 +29,15 @@ enum YocsowMinecraftVersion {
   YOCSOW_MC_JAVA_1_21 = 1
 };
 
+enum YocsowResultLimits {
+  YOCSOW_MAX_VILLAGE_RESULTS = 64
+};
+
+struct YocsowBlockPosition {
+  int32_t x;
+  int32_t z;
+};
+
 struct YocsowVillageResult {
   int32_t found;
   int32_t x;
@@ -43,6 +52,17 @@ yocsow_find_nearest_village(
     int64_t center_z,
     int64_t radius_blocks,
     struct YocsowVillageResult *result);
+
+YOCSOW_CUBIOMES_API int32_t
+yocsow_find_villages(
+    int32_t minecraft_version,
+    int64_t seed,
+    int64_t center_x,
+    int64_t center_z,
+    int64_t radius_blocks,
+    int32_t result_capacity,
+    int32_t *result_count,
+    struct YocsowBlockPosition *results);
 
 #ifdef __cplusplus
 }
