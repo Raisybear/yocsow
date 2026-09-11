@@ -22,14 +22,14 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct EngineState {
     launch: EngineLaunch,
-    process: Mutex<Option<EngineProcess>>,
+    engine: Mutex<PersistentEngine<EngineProcess>>,
 }
 
 impl EngineState {
     pub(crate) fn for_app(app: &AppHandle) -> Result<Self, EngineProcessError> {
         Ok(Self {
             launch: engine_launch(app)?,
-            process: Mutex::new(None),
+            engine: Mutex::new(PersistentEngine::default()),
         })
     }
 
@@ -55,30 +55,52 @@ impl EngineState {
         &self,
         operation: impl FnOnce(&mut EngineProcess) -> Result<T, EngineProcessError>,
     ) -> Result<T, EngineProcessError> {
-        let mut process = self
-            .process
+        let mut engine = self
+            .engine
             .lock()
             .map_err(|_| EngineProcessError::State("engine process lock was poisoned".into()))?;
 
-        if process.is_none() {
-            let mut started_process = EngineProcess::start(&self.launch)?;
-            started_process.initialize()?;
-            *process = Some(started_process);
+        engine.with_process(
+            || {
+                let mut process = EngineProcess::start(&self.launch)?;
+                process.initialize()?;
+                Ok(process)
+            },
+            operation,
+        )
+    }
+}
+
+struct PersistentEngine<P> {
+    process: Option<P>,
+}
+
+impl<P> Default for PersistentEngine<P> {
+    fn default() -> Self {
+        Self { process: None }
+    }
+}
+
+impl<P> PersistentEngine<P> {
+    fn with_process<T>(
+        &mut self,
+        start: impl FnOnce() -> Result<P, EngineProcessError>,
+        operation: impl FnOnce(&mut P) -> Result<T, EngineProcessError>,
+    ) -> Result<T, EngineProcessError> {
+        if self.process.is_none() {
+            self.process = Some(start()?);
         }
 
-        let result = {
-            let active_process = process
-                .as_mut()
-                .ok_or_else(|| EngineProcessError::State("engine process is unavailable".into()))?;
-
-            operation(active_process)
-        };
+        let result =
+            operation(self.process.as_mut().ok_or_else(|| {
+                EngineProcessError::State("engine process is unavailable".into())
+            })?);
 
         if result
             .as_ref()
             .is_err_and(|error| error.invalidates_process())
         {
-            *process = None;
+            self.process = None;
         }
 
         result
@@ -204,6 +226,8 @@ impl EngineProcess {
             EngineProcessError::Protocol("engine runner stdout is unavailable".into())
         })?;
 
+        log::info!("started Java engine process with PID {}", child.id());
+
         Ok(Self {
             child,
             client: JsonRpcClient::new(BufReader::new(stdout), stdin),
@@ -308,6 +332,7 @@ impl EngineProcess {
 
 impl Drop for EngineProcess {
     fn drop(&mut self) {
+        log::info!("stopping Java engine process with PID {}", self.child.id());
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
@@ -610,7 +635,7 @@ fn java_compatible_path(path: &Path) -> PathBuf {
 mod tests {
     use super::{
         ENGINE_RUNNER_MAIN_CLASS, EngineProcessError, EngineStatus, JSON_RPC_VERSION,
-        JsonRpcClient, SeedRangeQuery, SeedRangeResult, packaged_engine_launch,
+        JsonRpcClient, PersistentEngine, SeedRangeQuery, SeedRangeResult, packaged_engine_launch,
     };
     use serde_json::{Value, json};
     use std::env;
@@ -620,6 +645,109 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[derive(Debug, Default)]
+    struct FakeEngineProcess {
+        request_count: usize,
+    }
+
+    #[test]
+    fn persistent_engine_starts_once_and_reuses_its_process() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        let first_request_count = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |process| {
+                    process.request_count += 1;
+                    Ok(process.request_count)
+                },
+            )
+            .expect("first request should succeed");
+        let second_request_count = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |process| {
+                    process.request_count += 1;
+                    Ok(process.request_count)
+                },
+            )
+            .expect("second request should succeed");
+
+        assert_eq!(start_count, 1);
+        assert_eq!(first_request_count, 1);
+        assert_eq!(second_request_count, 2);
+    }
+
+    #[test]
+    fn persistent_engine_restarts_after_process_invalidating_errors() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        let error = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Err::<(), _>(EngineProcessError::Protocol("connection closed".into())),
+            )
+            .expect_err("protocol error should be returned");
+        assert!(error.to_string().contains("connection closed"));
+
+        engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Ok(()),
+            )
+            .expect("request after protocol failure should restart the process");
+
+        assert_eq!(start_count, 2);
+    }
+
+    #[test]
+    fn persistent_engine_keeps_process_after_remote_query_errors() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        let error = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| {
+                    Err::<(), _>(EngineProcessError::Remote {
+                        code: -32602,
+                        message: "invalid parameters".into(),
+                    })
+                },
+            )
+            .expect_err("remote error should be returned");
+        assert!(error.to_string().contains("invalid parameters"));
+
+        engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Ok(()),
+            )
+            .expect("remote query failure should keep the process alive");
+
+        assert_eq!(start_count, 1);
+    }
 
     #[cfg(windows)]
     #[test]
