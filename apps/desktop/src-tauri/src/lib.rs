@@ -11,6 +11,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(engine_process::EngineState::for_app(app.handle())?);
+            app.manage(seed_search::SeedSearchControl::default());
 
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -26,7 +27,8 @@ pub fn run() {
             commands::get_app_info,
             commands::get_engine_status,
             commands::seed_range_contains,
-            commands::search_seeds,
+            commands::search_seed_batches,
+            commands::stop_seed_search,
             commands::load_project,
             commands::save_project
         ])

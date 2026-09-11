@@ -8,28 +8,21 @@ import type { SearchRequirement } from '../domain/search-requirements'
 import {
   createRandomSearchStart,
   createSeedSearchRequest,
-  nextSeedAfterBatch,
-  searchSeeds,
-  type SeedSearchCandidate,
+  searchSeedBatches,
+  stopSeedSearch,
   type SeedSearchResult,
 } from '../native/seed-search'
 import './SeedFinderPanel.css'
-
-interface SearchProgress extends SeedSearchResult {
-  elapsedMilliseconds: number
-}
 
 type SeedFinderState =
   | { status: 'idle' }
   | {
       status: 'searching'
-      progress: SearchProgress
       stopRequested: boolean
     }
   | {
       status: 'result'
-      progress: SearchProgress
-      reason: 'limit' | 'stopped'
+      result: SeedSearchResult
     }
   | { status: 'browser' }
   | { status: 'error'; message: string }
@@ -41,8 +34,8 @@ interface SeedFinderRequestState {
 
 interface SearchSession {
   fingerprint: string
-  cancelled: boolean
-  progress: SearchProgress
+  discarded: boolean
+  stopRequested: boolean
 }
 
 interface SeedFinderPanelProps {
@@ -109,55 +102,16 @@ function formatElapsedTime(milliseconds: number): string {
     : `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }
 
-function compareCandidates(
-  left: SeedSearchCandidate,
-  right: SeedSearchCandidate,
-): number {
-  const matchDifference =
-    right.matchedRequirementCount - left.matchedRequirementCount
-
-  if (matchDifference !== 0) {
-    return matchDifference
-  }
-
-  const distanceDifference =
-    left.averageNormalizedDistance -
-    right.averageNormalizedDistance
-
-  if (distanceDifference !== 0) {
-    return distanceDifference
-  }
-
-  const leftSeed = BigInt(left.seed)
-  const rightSeed = BigInt(right.seed)
-
-  return leftSeed < rightSeed ? -1 : leftSeed > rightSeed ? 1 : 0
-}
-
-function mergeCandidates(
-  current: SeedSearchCandidate[],
-  incoming: SeedSearchCandidate[],
-  resultLimit: number,
-): SeedSearchCandidate[] {
-  const candidates = new Map(
-    current.map((candidate) => [candidate.seed, candidate]),
-  )
-
-  for (const candidate of incoming) {
-    candidates.set(candidate.seed, candidate)
-  }
-
-  return [...candidates.values()]
-    .sort(compareCandidates)
-    .slice(0, resultLimit)
-}
-
 function completeMatchCount(
-  candidates: SeedSearchCandidate[],
+  result: SeedSearchResult,
 ): number {
-  return candidates.filter(
+  return result.candidates.filter(
     (candidate) => candidate.matchesAllRequirements,
   ).length
+}
+
+function formatSeedCount(value: string): string {
+  return numberFormatter.format(BigInt(value))
 }
 
 export function SeedFinderPanel({
@@ -183,8 +137,12 @@ export function SeedFinderPanel({
 
   useEffect(() => {
     return () => {
-      if (activeSession.current !== null) {
-        activeSession.current.cancelled = true
+      const session = activeSession.current
+
+      if (session !== null) {
+        session.discarded = true
+        activeSession.current = null
+        void stopSeedSearch().catch(() => undefined)
       }
     }
   }, [fingerprint])
@@ -195,7 +153,6 @@ export function SeedFinderPanel({
     event.preventDefault()
 
     const submittedFingerprint = fingerprint
-    const startedAt = performance.now()
     let parsedResultLimit: number
 
     try {
@@ -213,12 +170,8 @@ export function SeedFinderPanel({
 
     const session: SearchSession = {
       fingerprint: submittedFingerprint,
-      cancelled: false,
-      progress: {
-        searchedSeedCount: 0,
-        candidates: [],
-        elapsedMilliseconds: 0,
-      },
+      discarded: false,
+      stopRequested: false,
     }
 
     activeSession.current = session
@@ -226,98 +179,34 @@ export function SeedFinderPanel({
       fingerprint: submittedFingerprint,
       state: {
         status: 'searching',
-        progress: session.progress,
         stopRequested: false,
       },
     })
 
     try {
-      let nextSeed = createRandomSearchStart()
-
-      while (!session.cancelled) {
-        const request = createSeedSearchRequest(
-          nextSeed,
+      const result = await searchSeedBatches(
+        createSeedSearchRequest(
+          createRandomSearchStart(),
           requirements,
           parsedResultLimit,
-        )
-        const batchResult = await searchSeeds(request)
+        ),
+      )
 
-        if (batchResult === null) {
-          if (activeSession.current === session) {
-            activeSession.current = null
-            setRequestState({
-              fingerprint: submittedFingerprint,
-              state: session.cancelled
-                ? {
-                    status: 'result',
-                    progress: session.progress,
-                    reason: 'stopped',
-                  }
-                : { status: 'browser' },
-            })
-          }
-          return
-        }
-
-        session.progress = {
-          searchedSeedCount:
-            session.progress.searchedSeedCount +
-            batchResult.searchedSeedCount,
-          candidates: mergeCandidates(
-            session.progress.candidates,
-            batchResult.candidates,
-            parsedResultLimit,
-          ),
-          elapsedMilliseconds: performance.now() - startedAt,
-        }
-
-        if (session.cancelled) {
-          if (activeSession.current === session) {
-            activeSession.current = null
-            setRequestState({
-              fingerprint: submittedFingerprint,
-              state: {
-                status: 'result',
-                progress: session.progress,
-                reason: 'stopped',
-              },
-            })
-          }
-          return
-        }
-
-        if (
-          completeMatchCount(session.progress.candidates) >=
-          parsedResultLimit
-        ) {
-          if (activeSession.current === session) {
-            activeSession.current = null
-            setRequestState({
-              fingerprint: submittedFingerprint,
-              state: {
-                status: 'result',
-                progress: session.progress,
-                reason: 'limit',
-              },
-            })
-          }
-          return
-        }
-
-        setRequestState({
-          fingerprint: submittedFingerprint,
-          state: {
-            status: 'searching',
-            progress: session.progress,
-            stopRequested: false,
-          },
-        })
-
-        nextSeed = nextSeedAfterBatch(request)
+      if (session.discarded || activeSession.current !== session) {
+        return
       }
+
+      activeSession.current = null
+      setRequestState({
+        fingerprint: submittedFingerprint,
+        state:
+          result === null
+            ? { status: 'browser' }
+            : { status: 'result', result },
+      })
     } catch (error) {
       if (
-        !session.cancelled &&
+        !session.discarded &&
         activeSession.current === session
       ) {
         setRequestState({
@@ -335,28 +224,42 @@ export function SeedFinderPanel({
     }
   }
 
-  function handleStop(): void {
+  async function handleStop(): Promise<void> {
     const session = activeSession.current
 
-    if (session === null || session.cancelled) {
+    if (session === null || session.stopRequested) {
       return
     }
 
-    session.cancelled = true
+    session.stopRequested = true
     setRequestState({
       fingerprint: session.fingerprint,
       state: {
         status: 'searching',
-        progress: session.progress,
         stopRequested: true,
       },
     })
+
+    try {
+      await stopSeedSearch()
+    } catch (error) {
+      if (activeSession.current === session) {
+        session.discarded = true
+        activeSession.current = null
+        setRequestState({
+          fingerprint: session.fingerprint,
+          state: {
+            status: 'error',
+            message: errorMessage(error),
+          },
+        })
+      }
+    }
   }
 
   const visibleProgress =
-    searchState.status === 'searching' ||
     searchState.status === 'result'
-      ? searchState.progress
+      ? searchState.result
       : null
 
   return (
@@ -446,22 +349,7 @@ export function SeedFinderPanel({
           <p>
             {searchState.stopRequested
               ? 'Stopping after the current batch…'
-              : 'Searching continuously…'}{' '}
-            Checked{' '}
-            {numberFormatter.format(
-              searchState.progress.searchedSeedCount,
-            )}{' '}
-            seeds, found{' '}
-            {completeMatchCount(
-              searchState.progress.candidates,
-            )}
-            /{resultLimit} complete matches. Showing{' '}
-            {searchState.progress.candidates.length} best candidates
-            after{' '}
-            {formatElapsedTime(
-              searchState.progress.elapsedMilliseconds,
-            )}
-            .
+              : 'Searching continuously in the Rust backend…'}
           </p>
         )}
 
@@ -475,22 +363,21 @@ export function SeedFinderPanel({
 
         {searchState.status === 'result' && (
           <p>
-            {searchState.reason === 'stopped'
-              ? 'Search stopped.'
-              : 'Result limit reached.'}{' '}
+            {searchState.result.reason === 'stopped' &&
+              'Search stopped. '}
+            {searchState.result.reason === 'limit' &&
+              'Result limit reached. '}
+            {searchState.result.reason === 'exhausted' &&
+              'The complete 64-bit seed space was searched. '}
             Checked{' '}
-            {numberFormatter.format(
-              searchState.progress.searchedSeedCount,
-            )}{' '}
+            {formatSeedCount(searchState.result.searchedSeedCount)}{' '}
             seeds and found{' '}
-            {completeMatchCount(
-              searchState.progress.candidates,
-            )}
+            {completeMatchCount(searchState.result)}
             /{resultLimit} complete matches. Showing{' '}
-            {searchState.progress.candidates.length} best candidates
+            {searchState.result.candidates.length} best candidates
             after{' '}
             {formatElapsedTime(
-              searchState.progress.elapsedMilliseconds,
+              searchState.result.elapsedMilliseconds,
             )}
             .
           </p>
@@ -498,7 +385,7 @@ export function SeedFinderPanel({
       </div>
 
       {searchState.status === 'result' &&
-        searchState.progress.candidates.length === 0 && (
+        searchState.result.candidates.length === 0 && (
           <p className="seed-finder-empty">
             No candidates were found before the search stopped.
           </p>

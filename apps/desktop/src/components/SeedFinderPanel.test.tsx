@@ -3,7 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRandomSearchStart,
-  searchSeeds,
+  searchSeedBatches,
+  stopSeedSearch,
   type SeedSearchResult,
 } from '../native/seed-search'
 import { SeedFinderPanel } from './SeedFinderPanel'
@@ -17,14 +18,16 @@ vi.mock('../native/seed-search', async (importOriginal) => {
   return {
     ...original,
     createRandomSearchStart: vi.fn(),
-    searchSeeds: vi.fn(),
+    searchSeedBatches: vi.fn(),
+    stopSeedSearch: vi.fn(),
   }
 })
 
 const createRandomSearchStartMock = vi.mocked(
   createRandomSearchStart,
 )
-const searchSeedsMock = vi.mocked(searchSeeds)
+const searchSeedBatchesMock = vi.mocked(searchSeedBatches)
+const stopSeedSearchMock = vi.mocked(stopSeedSearch)
 
 const requirements = [
   {
@@ -40,7 +43,9 @@ const requirements = [
 ]
 
 const matchingResult: SeedSearchResult = {
-  searchedSeedCount: 10_000,
+  searchedSeedCount: '20000',
+  elapsedMilliseconds: 1_250,
+  reason: 'limit',
   candidates: [
     {
       seed: '10004',
@@ -73,21 +78,18 @@ const matchingResult: SeedSearchResult = {
 describe('SeedFinderPanel', () => {
   beforeEach(() => {
     createRandomSearchStartMock.mockReset()
-    searchSeedsMock.mockReset()
+    searchSeedBatchesMock.mockReset()
+    stopSeedSearchMock.mockReset()
 
     createRandomSearchStartMock.mockReturnValue(BigInt(0))
-    searchSeedsMock.mockReturnValue(new Promise(() => {}))
+    searchSeedBatchesMock.mockReturnValue(new Promise(() => {}))
+    stopSeedSearchMock.mockResolvedValue(true)
   })
 
-  it('continues through batches until the result limit is reached', async () => {
+  it('delegates the continuous search to one Rust backend request', async () => {
     const user = userEvent.setup()
 
-    searchSeedsMock
-      .mockResolvedValueOnce({
-        searchedSeedCount: 10_000,
-        candidates: [],
-      })
-      .mockResolvedValueOnce(matchingResult)
+    searchSeedBatchesMock.mockResolvedValue(matchingResult)
 
     render(<SeedFinderPanel requirements={requirements} />)
 
@@ -106,26 +108,9 @@ describe('SeedFinderPanel', () => {
       ),
     ).toBeInTheDocument()
 
-    expect(searchSeedsMock).toHaveBeenNthCalledWith(1, {
+    expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
+    expect(searchSeedBatchesMock).toHaveBeenCalledWith({
       firstSeed: '0',
-      seedCount: 10_000,
-      minecraftVersion: '1.21',
-      requirements: [
-        {
-          id: 'spawn-village',
-          structureType: 'village',
-          center: {
-            x: '0',
-            z: '0',
-          },
-          radiusBlocks: '1000',
-        },
-      ],
-      resultLimit: 1,
-    })
-    expect(searchSeedsMock).toHaveBeenNthCalledWith(2, {
-      firstSeed: '10000',
-      seedCount: 10_000,
       minecraftVersion: '1.21',
       requirements: [
         {
@@ -152,7 +137,7 @@ describe('SeedFinderPanel', () => {
     const user = userEvent.setup()
     let finishBatch: ((result: SeedSearchResult) => void) | undefined
 
-    searchSeedsMock.mockReturnValue(
+    searchSeedBatchesMock.mockReturnValue(
       new Promise((resolve) => {
         finishBatch = resolve
       }),
@@ -167,7 +152,7 @@ describe('SeedFinderPanel', () => {
     )
 
     await waitFor(() => {
-      expect(searchSeedsMock).toHaveBeenCalledTimes(1)
+      expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
     })
 
     await user.click(
@@ -183,8 +168,10 @@ describe('SeedFinderPanel', () => {
     ).toBeInTheDocument()
 
     finishBatch?.({
-      searchedSeedCount: 10_000,
+      searchedSeedCount: '10000',
       candidates: [],
+      elapsedMilliseconds: 500,
+      reason: 'stopped',
     })
 
     expect(
@@ -192,7 +179,8 @@ describe('SeedFinderPanel', () => {
         /Search stopped\. Checked 10,000 seeds and found 0\/20 complete matches/,
       ),
     ).toBeInTheDocument()
-    expect(searchSeedsMock).toHaveBeenCalledTimes(1)
+    expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
+    expect(stopSeedSearchMock).toHaveBeenCalledTimes(1)
   })
 
   it('continues until enough seeds match every requirement', async () => {
@@ -211,33 +199,18 @@ describe('SeedFinderPanel', () => {
       },
     ]
 
-    searchSeedsMock
-      .mockResolvedValueOnce({
-        searchedSeedCount: 10_000,
-        candidates: [
-          {
-            ...matchingResult.candidates[0],
-            seed: '4',
-            totalRequirementCount: 3,
-            matchedRequirementCount: 1,
-            matchesAllRequirements: false,
-            matchRatio: 1 / 3,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        searchedSeedCount: 10_000,
-        candidates: [
-          {
-            ...matchingResult.candidates[0],
-            seed: '10004',
-            totalRequirementCount: 3,
-            matchedRequirementCount: 3,
-            matchesAllRequirements: true,
-            matchRatio: 1,
-          },
-        ],
-      })
+    searchSeedBatchesMock.mockResolvedValue({
+      ...matchingResult,
+      candidates: [
+        {
+          ...matchingResult.candidates[0],
+          totalRequirementCount: 3,
+          matchedRequirementCount: 3,
+          matchesAllRequirements: true,
+          matchRatio: 1,
+        },
+      ],
+    })
 
     render(<SeedFinderPanel requirements={threeRequirements} />)
 
@@ -255,12 +228,12 @@ describe('SeedFinderPanel', () => {
         /Result limit reached\. Checked 20,000 seeds and found 1\/1 complete matches/,
       ),
     ).toBeInTheDocument()
-    expect(searchSeedsMock).toHaveBeenCalledTimes(2)
+    expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
     expect(screen.getByText('Seed 10004')).toBeInTheDocument()
     expect(screen.getByText('3/3 matched')).toBeInTheDocument()
   })
 
-  it('orders visible partial matches by their match ratio', async () => {
+  it('displays candidates in the order returned by Rust', async () => {
     const user = userEvent.setup()
     const threeRequirements = [
       requirements[0],
@@ -268,17 +241,11 @@ describe('SeedFinderPanel', () => {
       { ...requirements[0], id: 'third-village' },
     ]
 
-    searchSeedsMock.mockResolvedValueOnce({
-      searchedSeedCount: 10_000,
+    searchSeedBatchesMock.mockResolvedValueOnce({
+      searchedSeedCount: '10000',
+      elapsedMilliseconds: 500,
+      reason: 'stopped',
       candidates: [
-        {
-          ...matchingResult.candidates[0],
-          seed: '1',
-          totalRequirementCount: 3,
-          matchedRequirementCount: 1,
-          matchesAllRequirements: false,
-          matchRatio: 1 / 3,
-        },
         {
           ...matchingResult.candidates[0],
           seed: '2',
@@ -286,6 +253,14 @@ describe('SeedFinderPanel', () => {
           matchedRequirementCount: 2,
           matchesAllRequirements: false,
           matchRatio: 2 / 3,
+        },
+        {
+          ...matchingResult.candidates[0],
+          seed: '1',
+          totalRequirementCount: 3,
+          matchedRequirementCount: 1,
+          matchesAllRequirements: false,
+          matchRatio: 1 / 3,
         },
       ],
     })
@@ -325,7 +300,7 @@ describe('SeedFinderPanel', () => {
   it('explains that searches require Tauri', async () => {
     const user = userEvent.setup()
 
-    searchSeedsMock.mockResolvedValue(null)
+    searchSeedBatchesMock.mockResolvedValue(null)
 
     render(<SeedFinderPanel requirements={requirements} />)
 
@@ -345,7 +320,7 @@ describe('SeedFinderPanel', () => {
   it('shows errors returned by the native search', async () => {
     const user = userEvent.setup()
 
-    searchSeedsMock.mockRejectedValue(
+    searchSeedBatchesMock.mockRejectedValue(
       new Error('Native locator unavailable'),
     )
 
