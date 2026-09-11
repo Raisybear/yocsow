@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type {
   SearchRequirement,
   StructureType,
@@ -11,6 +12,7 @@ const MAXIMUM_SIGNED_64_BIT_INTEGER = BigInt(
   '9223372036854775807',
 )
 const MAXIMUM_RESULTS = 100
+const SEED_SEARCH_PROGRESS_EVENT = 'seed-search-progress'
 
 export interface SeedSearchPosition {
   x: string
@@ -51,11 +53,18 @@ export interface SeedSearchCandidate {
   matches: StructureMatch[]
 }
 
-export interface SeedSearchResult {
+export interface SeedSearchProgress {
   searchedSeedCount: string
   candidates: SeedSearchCandidate[]
   elapsedMilliseconds: number
+}
+
+export interface SeedSearchResult extends SeedSearchProgress {
   reason: 'limit' | 'stopped' | 'exhausted'
+}
+
+interface SeedSearchProgressEvent extends SeedSearchProgress {
+  searchId: string
 }
 
 function validateResultLimit(resultLimit: number): void {
@@ -118,17 +127,37 @@ export function createSeedSearchRequest(
 
 export async function searchSeedBatches(
   request: SeedSearchRequest,
+  onProgress: (progress: SeedSearchProgress) => void,
 ): Promise<SeedSearchResult | null> {
   if (!isTauri()) {
     return null
   }
 
-  return invoke<SeedSearchResult>('search_seed_batches', {
-    firstSeed: request.firstSeed,
-    minecraftVersion: request.minecraftVersion,
-    requirements: request.requirements,
-    resultLimit: request.resultLimit,
-  })
+  const searchId = globalThis.crypto.randomUUID()
+  const unlisten = await listen<SeedSearchProgressEvent>(
+    SEED_SEARCH_PROGRESS_EVENT,
+    (event) => {
+      if (event.payload.searchId === searchId) {
+        onProgress({
+          searchedSeedCount: event.payload.searchedSeedCount,
+          candidates: event.payload.candidates,
+          elapsedMilliseconds: event.payload.elapsedMilliseconds,
+        })
+      }
+    },
+  )
+
+  try {
+    return await invoke<SeedSearchResult>('search_seed_batches', {
+      searchId,
+      firstSeed: request.firstSeed,
+      minecraftVersion: request.minecraftVersion,
+      requirements: request.requirements,
+      resultLimit: request.resultLimit,
+    })
+  } finally {
+    unlisten()
+  }
 }
 
 export async function stopSeedSearch(): Promise<boolean> {

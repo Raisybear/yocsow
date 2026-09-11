@@ -324,6 +324,15 @@ pub enum SeedSearchCompletionReason {
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ContinuousSeedSearchProgress {
+    #[serde(serialize_with = "serialize_u128_as_string")]
+    searched_seed_count: u128,
+    candidates: Vec<SeedSearchCandidate>,
+    elapsed_milliseconds: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ContinuousSeedSearchResult {
     #[serde(serialize_with = "serialize_u128_as_string")]
     searched_seed_count: u128,
@@ -336,6 +345,7 @@ pub(crate) fn run_continuous_seed_search(
     query: ContinuousSeedSearchQuery,
     cancellation: &AtomicBool,
     mut search_batch: impl FnMut(SeedSearchQuery) -> Result<SeedSearchResult, EngineProcessError>,
+    mut report_progress: impl FnMut(&ContinuousSeedSearchProgress) -> Result<(), EngineProcessError>,
 ) -> Result<ContinuousSeedSearchResult, EngineProcessError> {
     let started_at = Instant::now();
     let mut next_seed = query.first_seed;
@@ -374,6 +384,8 @@ pub(crate) fn run_continuous_seed_search(
             batch_result.candidates,
             query.result_limit as usize,
         );
+        let progress = continuous_progress(searched_seed_count, &candidates, started_at);
+        report_progress(&progress)?;
 
         if complete_match_count(&candidates) >= query.result_limit as usize {
             return Ok(continuous_result(
@@ -417,9 +429,25 @@ fn continuous_result(
     ContinuousSeedSearchResult {
         searched_seed_count,
         candidates,
-        elapsed_milliseconds: u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
+        elapsed_milliseconds: elapsed_milliseconds(started_at),
         reason,
     }
+}
+
+fn continuous_progress(
+    searched_seed_count: u128,
+    candidates: &[SeedSearchCandidate],
+    started_at: Instant,
+) -> ContinuousSeedSearchProgress {
+    ContinuousSeedSearchProgress {
+        searched_seed_count,
+        candidates: candidates.to_vec(),
+        elapsed_milliseconds: elapsed_milliseconds(started_at),
+    }
+}
+
+fn elapsed_milliseconds(started_at: Instant) -> u64 {
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
 fn merge_candidates(
@@ -796,16 +824,25 @@ mod tests {
         .expect("query should be valid");
         let cancellation = AtomicBool::new(false);
         let mut batches = Vec::new();
+        let mut progress_updates = Vec::new();
 
-        let result = run_continuous_seed_search(query, &cancellation, |batch| {
-            batches.push((batch.first_seed, batch.seed_count));
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| {
+                batches.push((batch.first_seed, batch.seed_count));
 
-            if batches.len() == 1 {
-                Ok(search_result(10_000, Vec::new()))
-            } else {
-                Ok(search_result(10_000, vec![candidate(10_004, 1, 0.4)]))
-            }
-        })
+                if batches.len() == 1 {
+                    Ok(search_result(10_000, Vec::new()))
+                } else {
+                    Ok(search_result(10_000, vec![candidate(10_004, 1, 0.4)]))
+                }
+            },
+            |progress| {
+                progress_updates.push(progress.clone());
+                Ok(())
+            },
+        )
         .expect("continuous search should succeed");
 
         assert_eq!(batches, vec![(0, 10_000), (10_000, 10_000)]);
@@ -813,6 +850,11 @@ mod tests {
         assert_eq!(result.reason, SeedSearchCompletionReason::Limit);
         assert_eq!(result.candidates.len(), 1);
         assert_eq!(result.candidates[0].seed, 10_004);
+        assert_eq!(progress_updates.len(), 2);
+        assert_eq!(progress_updates[0].searched_seed_count, 10_000);
+        assert!(progress_updates[0].candidates.is_empty());
+        assert_eq!(progress_updates[1].searched_seed_count, 20_000);
+        assert_eq!(progress_updates[1].candidates[0].seed, 10_004);
     }
 
     #[test]
@@ -846,11 +888,16 @@ mod tests {
         let cancellation = AtomicBool::new(false);
         let mut batch_count = 0;
 
-        let result = run_continuous_seed_search(query, &cancellation, |batch| {
-            batch_count += 1;
-            cancellation.store(true, AtomicOrdering::Release);
-            Ok(search_result(batch.seed_count, Vec::new()))
-        })
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| {
+                batch_count += 1;
+                cancellation.store(true, AtomicOrdering::Release);
+                Ok(search_result(batch.seed_count, Vec::new()))
+            },
+            |_| Ok(()),
+        )
         .expect("continuous search should stop cleanly");
 
         assert_eq!(batch_count, 1);
@@ -870,18 +917,23 @@ mod tests {
         let cancellation = AtomicBool::new(false);
         let mut batches = Vec::new();
 
-        let result = run_continuous_seed_search(query, &cancellation, |batch| {
-            batches.push((batch.first_seed, batch.seed_count));
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| {
+                batches.push((batch.first_seed, batch.seed_count));
 
-            if batches.len() == 1 {
-                Ok(search_result(batch.seed_count, Vec::new()))
-            } else {
-                Ok(search_result(
-                    batch.seed_count,
-                    vec![candidate(i64::MIN, 1, 0.2)],
-                ))
-            }
-        })
+                if batches.len() == 1 {
+                    Ok(search_result(batch.seed_count, Vec::new()))
+                } else {
+                    Ok(search_result(
+                        batch.seed_count,
+                        vec![candidate(i64::MIN, 1, 0.2)],
+                    ))
+                }
+            },
+            |_| Ok(()),
+        )
         .expect("continuous search should succeed");
 
         assert_eq!(batches, vec![(i64::MAX - 1, 2), (i64::MIN, 10_000)]);
@@ -900,9 +952,12 @@ mod tests {
         .expect("query should be valid");
         let cancellation = AtomicBool::new(false);
 
-        let error = run_continuous_seed_search(query, &cancellation, |_| {
-            Ok(search_result(9_999, Vec::new()))
-        })
+        let error = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |_| Ok(search_result(9_999, Vec::new())),
+            |_| Ok(()),
+        )
         .expect_err("incomplete batches should fail");
 
         assert!(

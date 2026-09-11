@@ -10,6 +10,7 @@ import {
   createSeedSearchRequest,
   searchSeedBatches,
   stopSeedSearch,
+  type SeedSearchProgress,
   type SeedSearchResult,
 } from '../native/seed-search'
 import './SeedFinderPanel.css'
@@ -18,6 +19,7 @@ type SeedFinderState =
   | { status: 'idle' }
   | {
       status: 'searching'
+      progress: SeedSearchProgress
       stopRequested: boolean
     }
   | {
@@ -36,6 +38,7 @@ interface SearchSession {
   fingerprint: string
   discarded: boolean
   stopRequested: boolean
+  progress: SeedSearchProgress
 }
 
 interface SeedFinderPanelProps {
@@ -103,7 +106,7 @@ function formatElapsedTime(milliseconds: number): string {
 }
 
 function completeMatchCount(
-  result: SeedSearchResult,
+  result: SeedSearchProgress,
 ): number {
   return result.candidates.filter(
     (candidate) => candidate.matchesAllRequirements,
@@ -172,6 +175,11 @@ export function SeedFinderPanel({
       fingerprint: submittedFingerprint,
       discarded: false,
       stopRequested: false,
+      progress: {
+        searchedSeedCount: '0',
+        candidates: [],
+        elapsedMilliseconds: 0,
+      },
     }
 
     activeSession.current = session
@@ -179,6 +187,7 @@ export function SeedFinderPanel({
       fingerprint: submittedFingerprint,
       state: {
         status: 'searching',
+        progress: session.progress,
         stopRequested: false,
       },
     })
@@ -190,6 +199,23 @@ export function SeedFinderPanel({
           requirements,
           parsedResultLimit,
         ),
+        (progress) => {
+          session.progress = progress
+
+          if (
+            !session.discarded &&
+            activeSession.current === session
+          ) {
+            setRequestState({
+              fingerprint: submittedFingerprint,
+              state: {
+                status: 'searching',
+                progress,
+                stopRequested: session.stopRequested,
+              },
+            })
+          }
+        },
       )
 
       if (session.discarded || activeSession.current !== session) {
@@ -236,6 +262,7 @@ export function SeedFinderPanel({
       fingerprint: session.fingerprint,
       state: {
         status: 'searching',
+        progress: session.progress,
         stopRequested: true,
       },
     })
@@ -258,9 +285,11 @@ export function SeedFinderPanel({
   }
 
   const visibleProgress =
-    searchState.status === 'result'
-      ? searchState.result
-      : null
+    searchState.status === 'searching'
+      ? searchState.progress
+      : searchState.status === 'result'
+        ? searchState.result
+        : null
 
   return (
     <section
@@ -349,7 +378,20 @@ export function SeedFinderPanel({
           <p>
             {searchState.stopRequested
               ? 'Stopping after the current batch…'
-              : 'Searching continuously in the Rust backend…'}
+              : 'Searching continuously…'}{' '}
+            Checked{' '}
+            {formatSeedCount(
+              searchState.progress.searchedSeedCount,
+            )}{' '}
+            seeds, found{' '}
+            {completeMatchCount(searchState.progress)}/{resultLimit}{' '}
+            complete matches. Showing{' '}
+            {searchState.progress.candidates.length} best candidates
+            after{' '}
+            {formatElapsedTime(
+              searchState.progress.elapsedMilliseconds,
+            )}
+            .
           </p>
         )}
 

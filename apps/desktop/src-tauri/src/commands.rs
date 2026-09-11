@@ -1,12 +1,24 @@
-use crate::engine_process::{EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult};
+use crate::engine_process::{
+    EngineProcessError, EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult,
+};
 use crate::project_files::{self, ProjectDocument};
 use crate::seed_search::{
-    ContinuousSeedSearchQuery, ContinuousSeedSearchResult, SeedSearchControl,
-    SeedSearchRequirementInput, run_continuous_seed_search,
+    ContinuousSeedSearchProgress, ContinuousSeedSearchQuery, ContinuousSeedSearchResult,
+    SeedSearchControl, SeedSearchRequirementInput, run_continuous_seed_search,
 };
 use serde::Serialize;
 use std::path::Path;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+const SEED_SEARCH_PROGRESS_EVENT: &str = "seed-search-progress";
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SeedSearchProgressEvent {
+    search_id: String,
+    #[serde(flatten)]
+    progress: ContinuousSeedSearchProgress,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -56,11 +68,18 @@ pub fn seed_range_contains(
 #[tauri::command]
 pub async fn search_seed_batches(
     app: AppHandle,
+    search_id: String,
     first_seed: String,
     minecraft_version: String,
     requirements: Vec<SeedSearchRequirementInput>,
     result_limit: u32,
 ) -> Result<ContinuousSeedSearchResult, String> {
+    let client_search_id = search_id.trim().to_owned();
+
+    if client_search_id.is_empty() {
+        return Err("invalid engine query: searchId must not be blank".into());
+    }
+
     let query = ContinuousSeedSearchQuery::parse(
         &first_seed,
         &minecraft_version,
@@ -72,14 +91,33 @@ pub async fn search_seed_batches(
         .state::<SeedSearchControl>()
         .begin()
         .map_err(|error| error.to_string())?;
-    let search_id = session.search_id;
+    let internal_search_id = session.search_id;
     let cancellation = session.cancellation;
     let worker_app = app.clone();
 
     let worker = tauri::async_runtime::spawn_blocking(move || {
         let engine = worker_app.state::<EngineState>();
 
-        run_continuous_seed_search(query, &cancellation, |batch| engine.search_seeds(batch))
+        run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| engine.search_seeds(batch),
+            |progress| {
+                worker_app
+                    .emit(
+                        SEED_SEARCH_PROGRESS_EVENT,
+                        SeedSearchProgressEvent {
+                            search_id: client_search_id.clone(),
+                            progress: progress.clone(),
+                        },
+                    )
+                    .map_err(|error| {
+                        EngineProcessError::State(format!(
+                            "could not emit seed search progress: {error}"
+                        ))
+                    })
+            },
+        )
     });
 
     let search_result = match worker.await {
@@ -88,7 +126,7 @@ pub async fn search_seed_batches(
     };
 
     app.state::<SeedSearchControl>()
-        .finish(search_id)
+        .finish(internal_search_id)
         .map_err(|error| error.to_string())?;
 
     search_result

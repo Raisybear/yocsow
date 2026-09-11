@@ -109,28 +109,70 @@ describe('SeedFinderPanel', () => {
     ).toBeInTheDocument()
 
     expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
-    expect(searchSeedBatchesMock).toHaveBeenCalledWith({
-      firstSeed: '0',
-      minecraftVersion: '1.21',
-      requirements: [
-        {
-          id: 'spawn-village',
-          structureType: 'village',
-          center: {
-            x: '0',
-            z: '0',
+    expect(searchSeedBatchesMock).toHaveBeenCalledWith(
+      {
+        firstSeed: '0',
+        minecraftVersion: '1.21',
+        requirements: [
+          {
+            id: 'spawn-village',
+            structureType: 'village',
+            center: {
+              x: '0',
+              z: '0',
+            },
+            radiusBlocks: '1000',
           },
-          radiusBlocks: '1000',
-        },
-      ],
-      resultLimit: 1,
-    })
+        ],
+        resultLimit: 1,
+      },
+      expect.any(Function),
+    )
 
     expect(screen.getByText('Seed 10004')).toBeInTheDocument()
     expect(screen.getByText('X -464, Z 16')).toBeInTheDocument()
     expect(
       screen.getByText('Distance: 464.3 blocks'),
     ).toBeInTheDocument()
+  })
+
+  it('shows progress snapshots emitted after native batches', async () => {
+    const user = userEvent.setup()
+
+    searchSeedBatchesMock.mockImplementation(
+      (_request, onProgress) => {
+        onProgress({
+          searchedSeedCount: '10000',
+          elapsedMilliseconds: 750,
+          candidates: [
+            {
+              ...matchingResult.candidates[0],
+              matchesAllRequirements: false,
+              matchedRequirementCount: 1,
+              totalRequirementCount: 2,
+              matchRatio: 0.5,
+            },
+          ],
+        })
+
+        return new Promise(() => {})
+      },
+    )
+
+    render(<SeedFinderPanel requirements={requirements} />)
+
+    await user.click(
+      screen.getByRole('button', {
+        name: 'Search seeds',
+      }),
+    )
+
+    expect(
+      await screen.findByText(
+        /Searching continuously… Checked 10,000 seeds, found 0\/20 complete matches/,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Seed 10004')).toBeInTheDocument()
   })
 
   it('stops after the active engine batch completes', async () => {
