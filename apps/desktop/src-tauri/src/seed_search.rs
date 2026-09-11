@@ -368,7 +368,18 @@ pub(crate) fn run_continuous_seed_search(
         let seed_count = remaining_seed_count
             .min(seeds_before_signed_maximum)
             .min(u128::from(MAXIMUM_SEEDS_PER_BATCH)) as u32;
-        let batch_result = search_batch(query.batch(next_seed, seed_count))?;
+        let batch_result = match search_batch(query.batch(next_seed, seed_count)) {
+            Ok(result) => result,
+            Err(_) if cancellation.load(AtomicOrdering::Acquire) => {
+                return Ok(continuous_result(
+                    searched_seed_count,
+                    candidates,
+                    started_at,
+                    SeedSearchCompletionReason::Stopped,
+                ));
+            }
+            Err(error) => return Err(error),
+        };
 
         if batch_result.searched_seed_count != seed_count {
             return Err(protocol_error(format!(
@@ -902,6 +913,33 @@ mod tests {
 
         assert_eq!(batch_count, 1);
         assert_eq!(result.searched_seed_count, 10_000);
+        assert_eq!(result.reason, SeedSearchCompletionReason::Stopped);
+    }
+
+    #[test]
+    fn continuous_search_treats_an_interrupted_batch_as_stopped() {
+        let query = ContinuousSeedSearchQuery::parse(
+            "0",
+            "1.21",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            20,
+        )
+        .expect("query should be valid");
+        let cancellation = AtomicBool::new(false);
+
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |_| {
+                cancellation.store(true, AtomicOrdering::Release);
+                Err(EngineProcessError::Cancelled)
+            },
+            |_| Ok(()),
+        )
+        .expect("an interrupted batch should stop cleanly");
+
+        assert_eq!(result.searched_seed_count, 0);
+        assert!(result.candidates.is_empty());
         assert_eq!(result.reason, SeedSearchCompletionReason::Stopped);
     }
 

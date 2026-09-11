@@ -125,16 +125,36 @@ pub async fn search_seed_batches(
         Err(error) => Err(format!("continuous seed search worker failed: {error}")),
     };
 
-    app.state::<SeedSearchControl>()
+    let cancellation_cleanup = app
+        .state::<EngineState>()
+        .finish_search_cancellation()
+        .map_err(|error| error.to_string());
+
+    let search_control_cleanup = app
+        .state::<SeedSearchControl>()
         .finish(internal_search_id)
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string());
+
+    cancellation_cleanup?;
+    search_control_cleanup?;
 
     search_result
 }
 
 #[tauri::command]
-pub fn stop_seed_search(control: State<'_, SeedSearchControl>) -> Result<bool, String> {
-    control.stop().map_err(|error| error.to_string())
+pub fn stop_seed_search(
+    control: State<'_, SeedSearchControl>,
+    engine: State<'_, EngineState>,
+) -> Result<bool, String> {
+    let stop_requested = control.stop().map_err(|error| error.to_string())?;
+
+    if stop_requested {
+        engine
+            .cancel_active_search()
+            .map_err(|error| error.to_string())?;
+    }
+
+    Ok(stop_requested)
 }
 
 #[tauri::command]
