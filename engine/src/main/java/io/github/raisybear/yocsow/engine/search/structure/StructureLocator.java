@@ -5,6 +5,12 @@ import io.github.raisybear.yocsow.engine.search.StructureType;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Locates one structure type for immutable search requests.
+ *
+ * <p>Implementations must support concurrent calls. Seed searches share each registered locator
+ * across a bounded pool of seed worker threads.
+ */
 public interface StructureLocator {
 
   StructureType structureType();

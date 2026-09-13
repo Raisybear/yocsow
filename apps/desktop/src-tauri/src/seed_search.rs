@@ -1,10 +1,91 @@
 use crate::engine_process::EngineProcessError;
 use serde::{Deserialize, Serialize, Serializer};
-use std::collections::HashSet;
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 const MAXIMUM_SEEDS_PER_BATCH: u32 = 10_000;
 const MAXIMUM_REQUIREMENTS: usize = 32;
 const MAXIMUM_RESULTS: u32 = 100;
+const SIGNED_64_BIT_SEED_COUNT: u128 = 1_u128 << 64;
+
+#[derive(Debug, Default)]
+pub struct SeedSearchControl {
+    active_search: Mutex<Option<ActiveSeedSearch>>,
+    next_search_id: AtomicU64,
+}
+
+impl SeedSearchControl {
+    pub(crate) fn begin(&self) -> Result<SeedSearchSession, EngineProcessError> {
+        let mut active_search = self.active_search.lock().map_err(|_| {
+            EngineProcessError::State("seed search control lock was poisoned".into())
+        })?;
+
+        if active_search.is_some() {
+            return Err(EngineProcessError::State(
+                "a continuous seed search is already running".into(),
+            ));
+        }
+
+        let search_id = self.next_search_id.fetch_add(1, AtomicOrdering::Relaxed);
+        let cancellation = Arc::new(AtomicBool::new(false));
+
+        *active_search = Some(ActiveSeedSearch {
+            search_id,
+            cancellation: Arc::clone(&cancellation),
+        });
+
+        Ok(SeedSearchSession {
+            search_id,
+            cancellation,
+        })
+    }
+
+    pub(crate) fn stop(&self) -> Result<bool, EngineProcessError> {
+        let active_search = self.active_search.lock().map_err(|_| {
+            EngineProcessError::State("seed search control lock was poisoned".into())
+        })?;
+
+        let Some(active_search) = active_search.as_ref() else {
+            return Ok(false);
+        };
+
+        active_search
+            .cancellation
+            .store(true, AtomicOrdering::Release);
+
+        Ok(true)
+    }
+
+    pub(crate) fn finish(&self, search_id: u64) -> Result<(), EngineProcessError> {
+        let mut active_search = self.active_search.lock().map_err(|_| {
+            EngineProcessError::State("seed search control lock was poisoned".into())
+        })?;
+
+        if active_search
+            .as_ref()
+            .is_some_and(|search| search.search_id == search_id)
+        {
+            *active_search = None;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct ActiveSeedSearch {
+    search_id: u64,
+    cancellation: Arc<AtomicBool>,
+}
+
+#[derive(Debug)]
+pub(crate) struct SeedSearchSession {
+    pub(crate) search_id: u64,
+    pub(crate) cancellation: Arc<AtomicBool>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -113,6 +194,43 @@ impl SeedSearchQuery {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContinuousSeedSearchQuery {
+    first_seed: i64,
+    minecraft_version: String,
+    requirements: Vec<SeedSearchRequirement>,
+    result_limit: u32,
+}
+
+impl ContinuousSeedSearchQuery {
+    pub(crate) fn parse(
+        first_seed: &str,
+        minecraft_version: &str,
+        requirements: Vec<SeedSearchRequirementInput>,
+        result_limit: u32,
+    ) -> Result<Self, EngineProcessError> {
+        let validated_query =
+            SeedSearchQuery::parse(first_seed, 1, minecraft_version, requirements, result_limit)?;
+
+        Ok(Self {
+            first_seed: validated_query.first_seed,
+            minecraft_version: validated_query.minecraft_version,
+            requirements: validated_query.requirements,
+            result_limit: validated_query.result_limit,
+        })
+    }
+
+    fn batch(&self, first_seed: i64, seed_count: u32) -> SeedSearchQuery {
+        SeedSearchQuery {
+            first_seed,
+            seed_count,
+            minecraft_version: self.minecraft_version.clone(),
+            requirements: self.requirements.clone(),
+            result_limit: self.result_limit,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SeedSearchRequirement {
@@ -194,6 +312,190 @@ impl SeedSearchResult {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum SeedSearchCompletionReason {
+    Limit,
+    Stopped,
+    Exhausted,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinuousSeedSearchProgress {
+    #[serde(serialize_with = "serialize_u128_as_string")]
+    searched_seed_count: u128,
+    candidates: Vec<SeedSearchCandidate>,
+    elapsed_milliseconds: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinuousSeedSearchResult {
+    #[serde(serialize_with = "serialize_u128_as_string")]
+    searched_seed_count: u128,
+    candidates: Vec<SeedSearchCandidate>,
+    elapsed_milliseconds: u64,
+    reason: SeedSearchCompletionReason,
+}
+
+pub(crate) fn run_continuous_seed_search(
+    query: ContinuousSeedSearchQuery,
+    cancellation: &AtomicBool,
+    mut search_batch: impl FnMut(SeedSearchQuery) -> Result<SeedSearchResult, EngineProcessError>,
+    mut report_progress: impl FnMut(&ContinuousSeedSearchProgress) -> Result<(), EngineProcessError>,
+) -> Result<ContinuousSeedSearchResult, EngineProcessError> {
+    let started_at = Instant::now();
+    let mut next_seed = query.first_seed;
+    let mut remaining_seed_count = SIGNED_64_BIT_SEED_COUNT;
+    let mut searched_seed_count = 0_u128;
+    let mut candidates = Vec::new();
+
+    loop {
+        if cancellation.load(AtomicOrdering::Acquire) {
+            return Ok(continuous_result(
+                searched_seed_count,
+                candidates,
+                started_at,
+                SeedSearchCompletionReason::Stopped,
+            ));
+        }
+
+        let seeds_before_signed_maximum =
+            (i128::from(i64::MAX) - i128::from(next_seed) + 1) as u128;
+        let seed_count = remaining_seed_count
+            .min(seeds_before_signed_maximum)
+            .min(u128::from(MAXIMUM_SEEDS_PER_BATCH)) as u32;
+        let batch_result = match search_batch(query.batch(next_seed, seed_count)) {
+            Ok(result) => result,
+            Err(_) if cancellation.load(AtomicOrdering::Acquire) => {
+                return Ok(continuous_result(
+                    searched_seed_count,
+                    candidates,
+                    started_at,
+                    SeedSearchCompletionReason::Stopped,
+                ));
+            }
+            Err(error) => return Err(error),
+        };
+
+        if batch_result.searched_seed_count != seed_count {
+            return Err(protocol_error(format!(
+                "engine reported {} searched seeds for a batch of {seed_count}",
+                batch_result.searched_seed_count
+            )));
+        }
+
+        searched_seed_count += u128::from(seed_count);
+        remaining_seed_count -= u128::from(seed_count);
+        merge_candidates(
+            &mut candidates,
+            batch_result.candidates,
+            query.result_limit as usize,
+        );
+        let progress = continuous_progress(searched_seed_count, &candidates, started_at);
+        report_progress(&progress)?;
+
+        if complete_match_count(&candidates) >= query.result_limit as usize {
+            return Ok(continuous_result(
+                searched_seed_count,
+                candidates,
+                started_at,
+                SeedSearchCompletionReason::Limit,
+            ));
+        }
+
+        if cancellation.load(AtomicOrdering::Acquire) {
+            return Ok(continuous_result(
+                searched_seed_count,
+                candidates,
+                started_at,
+                SeedSearchCompletionReason::Stopped,
+            ));
+        }
+
+        if remaining_seed_count == 0 {
+            return Ok(continuous_result(
+                searched_seed_count,
+                candidates,
+                started_at,
+                SeedSearchCompletionReason::Exhausted,
+            ));
+        }
+
+        next_seed = next_seed
+            .checked_add(i64::from(seed_count))
+            .unwrap_or(i64::MIN);
+    }
+}
+
+fn continuous_result(
+    searched_seed_count: u128,
+    candidates: Vec<SeedSearchCandidate>,
+    started_at: Instant,
+    reason: SeedSearchCompletionReason,
+) -> ContinuousSeedSearchResult {
+    ContinuousSeedSearchResult {
+        searched_seed_count,
+        candidates,
+        elapsed_milliseconds: elapsed_milliseconds(started_at),
+        reason,
+    }
+}
+
+fn continuous_progress(
+    searched_seed_count: u128,
+    candidates: &[SeedSearchCandidate],
+    started_at: Instant,
+) -> ContinuousSeedSearchProgress {
+    ContinuousSeedSearchProgress {
+        searched_seed_count,
+        candidates: candidates.to_vec(),
+        elapsed_milliseconds: elapsed_milliseconds(started_at),
+    }
+}
+
+fn elapsed_milliseconds(started_at: Instant) -> u64 {
+    u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX)
+}
+
+fn merge_candidates(
+    current: &mut Vec<SeedSearchCandidate>,
+    incoming: Vec<SeedSearchCandidate>,
+    result_limit: usize,
+) {
+    let mut candidates: HashMap<i64, SeedSearchCandidate> = current
+        .drain(..)
+        .map(|candidate| (candidate.seed, candidate))
+        .collect();
+
+    for candidate in incoming {
+        candidates.insert(candidate.seed, candidate);
+    }
+
+    *current = candidates.into_values().collect();
+    current.sort_by(compare_candidates);
+    current.truncate(result_limit);
+}
+
+fn compare_candidates(left: &SeedSearchCandidate, right: &SeedSearchCandidate) -> Ordering {
+    right
+        .matched_requirement_count
+        .cmp(&left.matched_requirement_count)
+        .then_with(|| {
+            left.average_normalized_distance
+                .total_cmp(&right.average_normalized_distance)
+        })
+        .then_with(|| left.seed.cmp(&right.seed))
+}
+
+fn complete_match_count(candidates: &[SeedSearchCandidate]) -> usize {
+    candidates
+        .iter()
+        .filter(|candidate| candidate.matches_all_requirements)
+        .count()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -345,6 +647,13 @@ where
     serializer.serialize_str(&value.to_string())
 }
 
+fn serialize_u128_as_string<S>(value: &u128, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
+
 fn input_error(message: impl Into<String>) -> EngineProcessError {
     EngineProcessError::Input(message.into())
 }
@@ -356,10 +665,13 @@ fn protocol_error(message: impl Into<String>) -> EngineProcessError {
 #[cfg(test)]
 mod tests {
     use super::{
+        ContinuousSeedSearchQuery, SeedSearchCompletionReason, SeedSearchControl,
         SeedSearchPositionInput, SeedSearchQuery, SeedSearchRequirementInput, SeedSearchResult,
+        merge_candidates, run_continuous_seed_search,
     };
     use crate::engine_process::EngineProcessError;
     use serde_json::json;
+    use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
     #[test]
     fn query_serializes_signed_values_as_engine_numbers() {
@@ -510,6 +822,265 @@ mod tests {
             .expect_err("inconsistent result should fail");
 
         assert!(error.to_string().contains("inconsistent match count"));
+    }
+
+    #[test]
+    fn continuous_search_advances_batches_until_the_result_limit() {
+        let query = ContinuousSeedSearchQuery::parse(
+            "0",
+            "1.21",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            1,
+        )
+        .expect("query should be valid");
+        let cancellation = AtomicBool::new(false);
+        let mut batches = Vec::new();
+        let mut progress_updates = Vec::new();
+
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| {
+                batches.push((batch.first_seed, batch.seed_count));
+
+                if batches.len() == 1 {
+                    Ok(search_result(10_000, Vec::new()))
+                } else {
+                    Ok(search_result(10_000, vec![candidate(10_004, 1, 0.4)]))
+                }
+            },
+            |progress| {
+                progress_updates.push(progress.clone());
+                Ok(())
+            },
+        )
+        .expect("continuous search should succeed");
+
+        assert_eq!(batches, vec![(0, 10_000), (10_000, 10_000)]);
+        assert_eq!(result.searched_seed_count, 20_000);
+        assert_eq!(result.reason, SeedSearchCompletionReason::Limit);
+        assert_eq!(result.candidates.len(), 1);
+        assert_eq!(result.candidates[0].seed, 10_004);
+        assert_eq!(progress_updates.len(), 2);
+        assert_eq!(progress_updates[0].searched_seed_count, 10_000);
+        assert!(progress_updates[0].candidates.is_empty());
+        assert_eq!(progress_updates[1].searched_seed_count, 20_000);
+        assert_eq!(progress_updates[1].candidates[0].seed, 10_004);
+    }
+
+    #[test]
+    fn search_control_allows_one_active_search_and_forwards_stop_requests() {
+        let control = SeedSearchControl::default();
+        let session = control.begin().expect("first search should start");
+
+        let error = control
+            .begin()
+            .expect_err("second search should be rejected");
+        assert!(error.to_string().contains("already running"));
+
+        assert!(control.stop().expect("stop request should succeed"));
+        assert!(session.cancellation.load(AtomicOrdering::Acquire));
+
+        control
+            .finish(session.search_id)
+            .expect("search should finish");
+        assert!(!control.stop().expect("there should be no active search"));
+    }
+
+    #[test]
+    fn continuous_search_stops_after_the_active_batch() {
+        let query = ContinuousSeedSearchQuery::parse(
+            "0",
+            "1.21",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            20,
+        )
+        .expect("query should be valid");
+        let cancellation = AtomicBool::new(false);
+        let mut batch_count = 0;
+
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| {
+                batch_count += 1;
+                cancellation.store(true, AtomicOrdering::Release);
+                Ok(search_result(batch.seed_count, Vec::new()))
+            },
+            |_| Ok(()),
+        )
+        .expect("continuous search should stop cleanly");
+
+        assert_eq!(batch_count, 1);
+        assert_eq!(result.searched_seed_count, 10_000);
+        assert_eq!(result.reason, SeedSearchCompletionReason::Stopped);
+    }
+
+    #[test]
+    fn continuous_search_treats_an_interrupted_batch_as_stopped() {
+        let query = ContinuousSeedSearchQuery::parse(
+            "0",
+            "1.21",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            20,
+        )
+        .expect("query should be valid");
+        let cancellation = AtomicBool::new(false);
+
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |_| {
+                cancellation.store(true, AtomicOrdering::Release);
+                Err(EngineProcessError::Cancelled)
+            },
+            |_| Ok(()),
+        )
+        .expect("an interrupted batch should stop cleanly");
+
+        assert_eq!(result.searched_seed_count, 0);
+        assert!(result.candidates.is_empty());
+        assert_eq!(result.reason, SeedSearchCompletionReason::Stopped);
+    }
+
+    #[test]
+    fn continuous_search_wraps_after_the_maximum_signed_seed() {
+        let query = ContinuousSeedSearchQuery::parse(
+            "9223372036854775806",
+            "1.21",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            1,
+        )
+        .expect("query should be valid");
+        let cancellation = AtomicBool::new(false);
+        let mut batches = Vec::new();
+
+        let result = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| {
+                batches.push((batch.first_seed, batch.seed_count));
+
+                if batches.len() == 1 {
+                    Ok(search_result(batch.seed_count, Vec::new()))
+                } else {
+                    Ok(search_result(
+                        batch.seed_count,
+                        vec![candidate(i64::MIN, 1, 0.2)],
+                    ))
+                }
+            },
+            |_| Ok(()),
+        )
+        .expect("continuous search should succeed");
+
+        assert_eq!(batches, vec![(i64::MAX - 1, 2), (i64::MIN, 10_000)]);
+        assert_eq!(result.searched_seed_count, 10_002);
+        assert_eq!(result.reason, SeedSearchCompletionReason::Limit);
+    }
+
+    #[test]
+    fn continuous_search_rejects_incomplete_engine_batches() {
+        let query = ContinuousSeedSearchQuery::parse(
+            "0",
+            "1.21",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            1,
+        )
+        .expect("query should be valid");
+        let cancellation = AtomicBool::new(false);
+
+        let error = run_continuous_seed_search(
+            query,
+            &cancellation,
+            |_| Ok(search_result(9_999, Vec::new())),
+            |_| Ok(()),
+        )
+        .expect_err("incomplete batches should fail");
+
+        assert!(
+            error
+                .to_string()
+                .contains("reported 9999 searched seeds for a batch of 10000")
+        );
+    }
+
+    #[test]
+    fn continuous_search_ranks_candidates_by_matches_distance_and_seed() {
+        let mut candidates = vec![candidate_with_matches(1, 3, 1, 0.1)];
+
+        merge_candidates(
+            &mut candidates,
+            vec![
+                candidate_with_matches(2, 3, 2, 0.8),
+                candidate_with_matches(3, 3, 2, 0.2),
+            ],
+            3,
+        );
+
+        assert_eq!(
+            candidates
+                .iter()
+                .map(|candidate| candidate.seed)
+                .collect::<Vec<_>>(),
+            vec![3, 2, 1]
+        );
+    }
+
+    fn search_result(
+        searched_seed_count: u32,
+        candidates: Vec<super::SeedSearchCandidate>,
+    ) -> SeedSearchResult {
+        SeedSearchResult {
+            searched_seed_count,
+            candidates,
+        }
+    }
+
+    fn candidate(
+        seed: i64,
+        matched_requirement_count: u32,
+        average_normalized_distance: f64,
+    ) -> super::SeedSearchCandidate {
+        candidate_with_matches(
+            seed,
+            1,
+            matched_requirement_count,
+            average_normalized_distance,
+        )
+    }
+
+    fn candidate_with_matches(
+        seed: i64,
+        total_requirement_count: u32,
+        matched_requirement_count: u32,
+        average_normalized_distance: f64,
+    ) -> super::SeedSearchCandidate {
+        let matches = (0..matched_requirement_count)
+            .map(|index| {
+                json!({
+                    "requirementId": format!("village-{index}"),
+                    "structureType": "village",
+                    "targetCenter": { "x": 0, "z": 0 },
+                    "radiusBlocks": 1000,
+                    "actualPosition": { "x": 0, "z": 0 },
+                    "distanceBlocks": 0.0,
+                    "normalizedDistance": 0.0
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::from_value(json!({
+            "seed": seed,
+            "totalRequirementCount": total_requirement_count,
+            "matchedRequirementCount": matched_requirement_count,
+            "matchesAllRequirements": matched_requirement_count == total_requirement_count,
+            "matchRatio": f64::from(matched_requirement_count)
+                / f64::from(total_requirement_count),
+            "averageNormalizedDistance": average_normalized_distance,
+            "matches": matches
+        }))
+        .expect("candidate should deserialize")
     }
 
     fn requirement(id: &str, x: &str, z: &str, radius_blocks: &str) -> SeedSearchRequirementInput {

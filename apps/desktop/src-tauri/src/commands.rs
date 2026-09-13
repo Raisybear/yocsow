@@ -1,9 +1,24 @@
-use crate::engine_process::{EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult};
+use crate::engine_process::{
+    EngineProcessError, EngineState, EngineStatus, SeedRangeQuery, SeedRangeResult,
+};
 use crate::project_files::{self, ProjectDocument};
-use crate::seed_search::{SeedSearchQuery, SeedSearchRequirementInput, SeedSearchResult};
+use crate::seed_search::{
+    ContinuousSeedSearchProgress, ContinuousSeedSearchQuery, ContinuousSeedSearchResult,
+    SeedSearchControl, SeedSearchRequirementInput, run_continuous_seed_search,
+};
 use serde::Serialize;
 use std::path::Path;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State};
+
+const SEED_SEARCH_PROGRESS_EVENT: &str = "seed-search-progress";
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SeedSearchProgressEvent {
+    search_id: String,
+    #[serde(flatten)]
+    progress: ContinuousSeedSearchProgress,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,24 +66,95 @@ pub fn seed_range_contains(
 }
 
 #[tauri::command]
-pub fn search_seeds(
-    state: State<'_, EngineState>,
+pub async fn search_seed_batches(
+    app: AppHandle,
+    search_id: String,
     first_seed: String,
-    seed_count: u32,
     minecraft_version: String,
     requirements: Vec<SeedSearchRequirementInput>,
     result_limit: u32,
-) -> Result<SeedSearchResult, String> {
-    let query = SeedSearchQuery::parse(
+) -> Result<ContinuousSeedSearchResult, String> {
+    let client_search_id = search_id.trim().to_owned();
+
+    if client_search_id.is_empty() {
+        return Err("invalid engine query: searchId must not be blank".into());
+    }
+
+    let query = ContinuousSeedSearchQuery::parse(
         &first_seed,
-        seed_count,
         &minecraft_version,
         requirements,
         result_limit,
     )
     .map_err(|error| error.to_string())?;
+    let session = app
+        .state::<SeedSearchControl>()
+        .begin()
+        .map_err(|error| error.to_string())?;
+    let internal_search_id = session.search_id;
+    let cancellation = session.cancellation;
+    let worker_app = app.clone();
 
-    state.search_seeds(query).map_err(|error| error.to_string())
+    let worker = tauri::async_runtime::spawn_blocking(move || {
+        let engine = worker_app.state::<EngineState>();
+
+        run_continuous_seed_search(
+            query,
+            &cancellation,
+            |batch| engine.search_seeds(batch),
+            |progress| {
+                worker_app
+                    .emit(
+                        SEED_SEARCH_PROGRESS_EVENT,
+                        SeedSearchProgressEvent {
+                            search_id: client_search_id.clone(),
+                            progress: progress.clone(),
+                        },
+                    )
+                    .map_err(|error| {
+                        EngineProcessError::State(format!(
+                            "could not emit seed search progress: {error}"
+                        ))
+                    })
+            },
+        )
+    });
+
+    let search_result = match worker.await {
+        Ok(result) => result.map_err(|error| error.to_string()),
+        Err(error) => Err(format!("continuous seed search worker failed: {error}")),
+    };
+
+    let cancellation_cleanup = app
+        .state::<EngineState>()
+        .finish_search_cancellation()
+        .map_err(|error| error.to_string());
+
+    let search_control_cleanup = app
+        .state::<SeedSearchControl>()
+        .finish(internal_search_id)
+        .map_err(|error| error.to_string());
+
+    cancellation_cleanup?;
+    search_control_cleanup?;
+
+    search_result
+}
+
+#[tauri::command]
+pub fn stop_seed_search(
+    control: State<'_, SeedSearchControl>,
+    engine: State<'_, EngineState>,
+) -> Result<bool, String> {
+    let stop_requested = control.stop().map_err(|error| error.to_string())?;
+
+    if stop_requested {
+        engine
+            .cancel_active_search()
+            .map_err(|error| error.to_string())?;
+    }
+
+    Ok(stop_requested)
 }
 
 #[tauri::command]

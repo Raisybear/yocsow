@@ -1,4 +1,5 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import type {
   SearchRequirement,
   StructureType,
@@ -10,8 +11,8 @@ const MINIMUM_SIGNED_64_BIT_INTEGER = BigInt(
 const MAXIMUM_SIGNED_64_BIT_INTEGER = BigInt(
   '9223372036854775807',
 )
-export const MAXIMUM_SEEDS_PER_BATCH = 10_000
 const MAXIMUM_RESULTS = 100
+const SEED_SEARCH_PROGRESS_EVENT = 'seed-search-progress'
 
 export interface SeedSearchPosition {
   x: string
@@ -27,7 +28,6 @@ export interface SeedSearchRequirement {
 
 export interface SeedSearchRequest {
   firstSeed: string
-  seedCount: number
   minecraftVersion: '1.21'
   requirements: SeedSearchRequirement[]
   resultLimit: number
@@ -53,35 +53,18 @@ export interface SeedSearchCandidate {
   matches: StructureMatch[]
 }
 
-export interface SeedSearchResult {
-  searchedSeedCount: number
+export interface SeedSearchProgress {
+  searchedSeedCount: string
   candidates: SeedSearchCandidate[]
+  elapsedMilliseconds: number
 }
 
-function parseSigned64BitInteger(
-  name: string,
-  value: string,
-): bigint {
-  const normalizedValue = value.trim()
+export interface SeedSearchResult extends SeedSearchProgress {
+  reason: 'limit' | 'stopped' | 'exhausted'
+}
 
-  if (!/^-?\d+$/.test(normalizedValue)) {
-    throw new Error(
-      `${name} must be a signed 64-bit integer.`,
-    )
-  }
-
-  const parsedValue = BigInt(normalizedValue)
-
-  if (
-    parsedValue < MINIMUM_SIGNED_64_BIT_INTEGER ||
-    parsedValue > MAXIMUM_SIGNED_64_BIT_INTEGER
-  ) {
-    throw new Error(
-      `${name} must be a signed 64-bit integer.`,
-    )
-  }
-
-  return parsedValue
+interface SeedSearchProgressEvent extends SeedSearchProgress {
+  searchId: string
 }
 
 function validateResultLimit(resultLimit: number): void {
@@ -126,17 +109,8 @@ export function createSeedSearchRequest(
 
   validateResultLimit(resultLimit)
 
-  const availableSeeds =
-    MAXIMUM_SIGNED_64_BIT_INTEGER - firstSeed + BigInt(1)
-  const seedCount = Number(
-    availableSeeds < BigInt(MAXIMUM_SEEDS_PER_BATCH)
-      ? availableSeeds
-      : BigInt(MAXIMUM_SEEDS_PER_BATCH),
-  )
-
   return {
     firstSeed: firstSeed.toString(),
-    seedCount,
     minecraftVersion: '1.21',
     requirements: requirements.map((requirement) => ({
       id: requirement.id,
@@ -151,32 +125,45 @@ export function createSeedSearchRequest(
   }
 }
 
-export function nextSeedAfterBatch(
+export async function searchSeedBatches(
   request: SeedSearchRequest,
-): bigint {
-  const firstSeed = parseSigned64BitInteger(
-    'First seed',
-    request.firstSeed,
-  )
-  const nextSeed = firstSeed + BigInt(request.seedCount)
-
-  return nextSeed > MAXIMUM_SIGNED_64_BIT_INTEGER
-    ? MINIMUM_SIGNED_64_BIT_INTEGER
-    : nextSeed
-}
-
-export async function searchSeeds(
-  request: SeedSearchRequest,
+  onProgress: (progress: SeedSearchProgress) => void,
 ): Promise<SeedSearchResult | null> {
   if (!isTauri()) {
     return null
   }
 
-  return invoke<SeedSearchResult>('search_seeds', {
-    firstSeed: request.firstSeed,
-    seedCount: request.seedCount,
-    minecraftVersion: request.minecraftVersion,
-    requirements: request.requirements,
-    resultLimit: request.resultLimit,
-  })
+  const searchId = globalThis.crypto.randomUUID()
+  const unlisten = await listen<SeedSearchProgressEvent>(
+    SEED_SEARCH_PROGRESS_EVENT,
+    (event) => {
+      if (event.payload.searchId === searchId) {
+        onProgress({
+          searchedSeedCount: event.payload.searchedSeedCount,
+          candidates: event.payload.candidates,
+          elapsedMilliseconds: event.payload.elapsedMilliseconds,
+        })
+      }
+    },
+  )
+
+  try {
+    return await invoke<SeedSearchResult>('search_seed_batches', {
+      searchId,
+      firstSeed: request.firstSeed,
+      minecraftVersion: request.minecraftVersion,
+      requirements: request.requirements,
+      resultLimit: request.resultLimit,
+    })
+  } finally {
+    unlisten()
+  }
+}
+
+export async function stopSeedSearch(): Promise<boolean> {
+  if (!isTauri()) {
+    return false
+  }
+
+  return invoke<boolean>('stop_seed_search')
 }

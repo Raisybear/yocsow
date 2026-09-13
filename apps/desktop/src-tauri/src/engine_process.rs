@@ -9,7 +9,8 @@ use std::fmt::{self, Display, Formatter};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::{Arc, Mutex, Weak};
 use tauri::{AppHandle, Manager};
 
 const JSON_RPC_VERSION: &str = "2.0";
@@ -22,14 +23,18 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct EngineState {
     launch: EngineLaunch,
-    process: Mutex<Option<EngineProcess>>,
+    engine: Mutex<PersistentEngine<EngineProcess>>,
+    process_control: Arc<EngineProcessControl>,
+    cancellation_requested: AtomicBool,
 }
 
 impl EngineState {
     pub(crate) fn for_app(app: &AppHandle) -> Result<Self, EngineProcessError> {
         Ok(Self {
             launch: engine_launch(app)?,
-            process: Mutex::new(None),
+            engine: Mutex::new(PersistentEngine::default()),
+            process_control: Arc::new(EngineProcessControl::default()),
+            cancellation_requested: AtomicBool::new(false),
         })
     }
 
@@ -51,34 +56,105 @@ impl EngineState {
         self.with_process(|process| process.search_seeds(query))
     }
 
+    pub(crate) fn cancel_active_search(&self) -> Result<bool, EngineProcessError> {
+        self.cancellation_requested
+            .store(true, AtomicOrdering::Release);
+        self.process_control.terminate_active()
+    }
+
+    pub(crate) fn finish_search_cancellation(&self) -> Result<(), EngineProcessError> {
+        if !self.cancellation_requested.load(AtomicOrdering::Acquire) {
+            return Ok(());
+        }
+
+        let mut engine = self
+            .engine
+            .lock()
+            .map_err(|_| EngineProcessError::State("engine process lock was poisoned".into()))?;
+
+        if self
+            .cancellation_requested
+            .swap(false, AtomicOrdering::AcqRel)
+        {
+            engine.reset();
+        }
+
+        Ok(())
+    }
+
     fn with_process<T>(
         &self,
         operation: impl FnOnce(&mut EngineProcess) -> Result<T, EngineProcessError>,
     ) -> Result<T, EngineProcessError> {
-        let mut process = self
-            .process
+        let mut engine = self
+            .engine
             .lock()
             .map_err(|_| EngineProcessError::State("engine process lock was poisoned".into()))?;
 
-        if process.is_none() {
-            let mut started_process = EngineProcess::start(&self.launch)?;
-            started_process.initialize()?;
-            *process = Some(started_process);
+        if self.cancellation_requested.load(AtomicOrdering::Acquire) {
+            engine.reset();
+            return Err(EngineProcessError::Cancelled);
         }
 
-        let result = {
-            let active_process = process
-                .as_mut()
-                .ok_or_else(|| EngineProcessError::State("engine process is unavailable".into()))?;
+        let result = engine.with_process(
+            || {
+                let mut process =
+                    EngineProcess::start(&self.launch, Arc::clone(&self.process_control))?;
+                process.initialize()?;
+                Ok(process)
+            },
+            |process| {
+                if self.cancellation_requested.load(AtomicOrdering::Acquire) {
+                    return Err(EngineProcessError::Cancelled);
+                }
 
-            operation(active_process)
-        };
+                operation(process)
+            },
+        );
+
+        if self.cancellation_requested.load(AtomicOrdering::Acquire) {
+            engine.reset();
+            return Err(EngineProcessError::Cancelled);
+        }
+
+        result
+    }
+}
+
+struct PersistentEngine<P> {
+    process: Option<P>,
+}
+
+impl<P> Default for PersistentEngine<P> {
+    fn default() -> Self {
+        Self { process: None }
+    }
+}
+
+impl<P> PersistentEngine<P> {
+    fn reset(&mut self) {
+        self.process = None;
+    }
+
+    fn with_process<T>(
+        &mut self,
+        start: impl FnOnce() -> Result<P, EngineProcessError>,
+        operation: impl FnOnce(&mut P) -> Result<T, EngineProcessError>,
+    ) -> Result<T, EngineProcessError> {
+        if self.process.is_none() {
+            self.process = Some(start()?);
+        }
+
+        let result =
+            operation(self.process.as_mut().ok_or_else(|| {
+                EngineProcessError::State("engine process is unavailable".into())
+            })?);
 
         if result
             .as_ref()
             .is_err_and(|error| error.invalidates_process())
         {
-            *process = None;
+            self.process = None;
         }
 
         result
@@ -128,8 +204,89 @@ fn parse_signed_64_bit_integer(parameter: &str, value: &str) -> Result<i64, Engi
 }
 
 struct EngineProcess {
-    child: Child,
+    process_id: u32,
+    child: Arc<Mutex<Child>>,
+    process_control: Arc<EngineProcessControl>,
     client: JsonRpcClient<BufReader<ChildStdout>, ChildStdin>,
+}
+
+#[derive(Debug, Default)]
+struct EngineProcessControl {
+    active_process: Mutex<Option<ActiveEngineProcess>>,
+}
+
+#[derive(Debug)]
+struct ActiveEngineProcess {
+    process_id: u32,
+    child: Weak<Mutex<Child>>,
+}
+
+impl EngineProcessControl {
+    fn register(
+        &self,
+        process_id: u32,
+        child: &Arc<Mutex<Child>>,
+    ) -> Result<(), EngineProcessError> {
+        let mut active_process = self.active_process.lock().map_err(|_| {
+            EngineProcessError::State("engine process control lock was poisoned".into())
+        })?;
+
+        *active_process = Some(ActiveEngineProcess {
+            process_id,
+            child: Arc::downgrade(child),
+        });
+
+        Ok(())
+    }
+
+    fn unregister(&self, process_id: u32) {
+        let mut active_process = self
+            .active_process
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        if active_process
+            .as_ref()
+            .is_some_and(|process| process.process_id == process_id)
+        {
+            *active_process = None;
+        }
+    }
+
+    fn terminate_active(&self) -> Result<bool, EngineProcessError> {
+        let active_process = {
+            let active_process = self.active_process.lock().map_err(|_| {
+                EngineProcessError::State("engine process control lock was poisoned".into())
+            })?;
+
+            active_process.as_ref().and_then(|process| {
+                process
+                    .child
+                    .upgrade()
+                    .map(|child| (process.process_id, child))
+            })
+        };
+
+        let Some((process_id, child)) = active_process else {
+            return Ok(false);
+        };
+
+        let mut child = child.lock().map_err(|_| {
+            EngineProcessError::State("engine child process lock was poisoned".into())
+        })?;
+
+        if child.try_wait()?.is_some() {
+            return Ok(false);
+        }
+
+        log::info!("interrupting Java engine process with PID {process_id}");
+
+        match terminate_process(&mut child) {
+            Ok(()) => Ok(true),
+            Err(_) if child.try_wait()?.is_some() => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,7 +334,10 @@ impl EngineLaunch {
 }
 
 impl EngineProcess {
-    fn start(launch: &EngineLaunch) -> Result<Self, EngineProcessError> {
+    fn start(
+        launch: &EngineLaunch,
+        process_control: Arc<EngineProcessControl>,
+    ) -> Result<Self, EngineProcessError> {
         launch.validate()?;
 
         let mut command = Command::new(&launch.executable);
@@ -204,8 +364,16 @@ impl EngineProcess {
             EngineProcessError::Protocol("engine runner stdout is unavailable".into())
         })?;
 
+        let process_id = child.id();
+        let child = Arc::new(Mutex::new(child));
+        process_control.register(process_id, &child)?;
+
+        log::info!("started Java engine process with PID {process_id}");
+
         Ok(Self {
+            process_id,
             child,
+            process_control,
             client: JsonRpcClient::new(BufReader::new(stdout), stdin),
         })
     }
@@ -308,8 +476,44 @@ impl EngineProcess {
 
 impl Drop for EngineProcess {
     fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        self.process_control.unregister(self.process_id);
+        let mut child = self
+            .child
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        log::info!("stopping Java engine process with PID {}", self.process_id);
+
+        if child.try_wait().is_ok_and(|status| status.is_none()) {
+            let _ = terminate_process(&mut child);
+        }
+
+        let _ = child.wait();
+    }
+}
+
+#[cfg(not(windows))]
+fn terminate_process(child: &mut Child) -> std::io::Result<()> {
+    child.kill()
+}
+
+#[cfg(windows)]
+fn terminate_process(child: &mut Child) -> std::io::Result<()> {
+    use std::os::windows::process::CommandExt;
+
+    let process_id = child.id().to_string();
+    let status = Command::new("taskkill")
+        .args(["/PID", &process_id, "/T", "/F"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()?;
+
+    if status.success() || child.try_wait()?.is_some() {
+        Ok(())
+    } else {
+        child.kill()
     }
 }
 
@@ -428,11 +632,15 @@ pub(crate) enum EngineProcessError {
     Protocol(String),
     Remote { code: i64, message: String },
     State(String),
+    Cancelled,
 }
 
 impl EngineProcessError {
     fn invalidates_process(&self) -> bool {
-        matches!(self, Self::Io(_) | Self::Json(_) | Self::Protocol(_))
+        matches!(
+            self,
+            Self::Io(_) | Self::Json(_) | Self::Protocol(_) | Self::Cancelled
+        )
     }
 }
 
@@ -455,6 +663,9 @@ impl Display for EngineProcessError {
             }
             Self::State(message) => {
                 write!(formatter, "engine state error: {message}")
+            }
+            Self::Cancelled => {
+                write!(formatter, "engine request was cancelled")
             }
         }
     }
@@ -610,7 +821,7 @@ fn java_compatible_path(path: &Path) -> PathBuf {
 mod tests {
     use super::{
         ENGINE_RUNNER_MAIN_CLASS, EngineProcessError, EngineStatus, JSON_RPC_VERSION,
-        JsonRpcClient, SeedRangeQuery, SeedRangeResult, packaged_engine_launch,
+        JsonRpcClient, PersistentEngine, SeedRangeQuery, SeedRangeResult, packaged_engine_launch,
     };
     use serde_json::{Value, json};
     use std::env;
@@ -620,6 +831,139 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[derive(Debug, Default)]
+    struct FakeEngineProcess {
+        request_count: usize,
+    }
+
+    #[test]
+    fn persistent_engine_starts_once_and_reuses_its_process() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        let first_request_count = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |process| {
+                    process.request_count += 1;
+                    Ok(process.request_count)
+                },
+            )
+            .expect("first request should succeed");
+        let second_request_count = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |process| {
+                    process.request_count += 1;
+                    Ok(process.request_count)
+                },
+            )
+            .expect("second request should succeed");
+
+        assert_eq!(start_count, 1);
+        assert_eq!(first_request_count, 1);
+        assert_eq!(second_request_count, 2);
+    }
+
+    #[test]
+    fn persistent_engine_restarts_after_process_invalidating_errors() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        let error = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Err::<(), _>(EngineProcessError::Protocol("connection closed".into())),
+            )
+            .expect_err("protocol error should be returned");
+        assert!(error.to_string().contains("connection closed"));
+
+        engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Ok(()),
+            )
+            .expect("request after protocol failure should restart the process");
+
+        assert_eq!(start_count, 2);
+    }
+
+    #[test]
+    fn persistent_engine_keeps_process_after_remote_query_errors() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        let error = engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| {
+                    Err::<(), _>(EngineProcessError::Remote {
+                        code: -32602,
+                        message: "invalid parameters".into(),
+                    })
+                },
+            )
+            .expect_err("remote error should be returned");
+        assert!(error.to_string().contains("invalid parameters"));
+
+        engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Ok(()),
+            )
+            .expect("remote query failure should keep the process alive");
+
+        assert_eq!(start_count, 1);
+    }
+
+    #[test]
+    fn persistent_engine_restarts_after_an_explicit_reset() {
+        let mut engine = PersistentEngine::default();
+        let mut start_count = 0;
+
+        engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Ok(()),
+            )
+            .expect("first request should succeed");
+
+        engine.reset();
+
+        engine
+            .with_process(
+                || {
+                    start_count += 1;
+                    Ok(FakeEngineProcess::default())
+                },
+                |_| Ok(()),
+            )
+            .expect("request after reset should restart the process");
+
+        assert_eq!(start_count, 2);
+    }
 
     #[cfg(windows)]
     #[test]
