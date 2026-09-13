@@ -82,10 +82,10 @@ class JsonRpcServerTest {
   void searchesSeedsAndReturnsRankedVillageMatches() throws IOException {
     RecordingVillageLocator locator = new RecordingVillageLocator();
 
-    locator.locate(10, "village-1", new BlockPosition(900, 0));
-    locator.locate(11, "village-1", new BlockPosition(600, 0));
-    locator.locate(11, "village-2", new BlockPosition(0, 800));
-    locator.locate(12, "village-1", new BlockPosition(100, 0));
+    locator.locate(10, new BlockPosition(900, 0));
+    locator.locate(11, new BlockPosition(600, 0));
+    locator.locate(11, new BlockPosition(0, 800));
+    locator.locate(12, new BlockPosition(100, 0));
 
     String input =
         """
@@ -110,7 +110,8 @@ class JsonRpcServerTest {
     assertEquals(2, first.get("matchedRequirementCount").intValue());
     assertTrue(first.get("matchesAllRequirements").booleanValue());
     assertEquals("village", first.at("/matches/0/structureType").stringValue());
-    assertEquals(800, first.at("/matches/1/actualPosition/z").longValue());
+    assertEquals(800, first.at("/matches/0/actualPosition/z").longValue());
+    assertEquals(600, first.at("/matches/1/actualPosition/x").longValue());
 
     assertEquals(12, second.get("seed").longValue());
     assertEquals(0.1, second.get("averageNormalizedDistance").doubleValue(), 0.000_001);
@@ -337,10 +338,13 @@ class JsonRpcServerTest {
 
   private static final class RecordingVillageLocator implements StructureLocator {
 
-    private final Map<SearchKey, BlockPosition> positions = new HashMap<>();
+    private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
 
-    void locate(long seed, String requirementId, BlockPosition position) {
-      positions.put(new SearchKey(seed, requirementId), position);
+    void locate(long seed, BlockPosition position) {
+      positions
+          .computeIfAbsent(
+              new SearchKey(seed, new BlockPosition(0, 0), 1_000), ignored -> new ArrayList<>())
+          .add(position);
     }
 
     @Override
@@ -350,10 +354,23 @@ class JsonRpcServerTest {
 
     @Override
     public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
-      return Optional.ofNullable(
-          positions.get(new SearchKey(request.seed(), request.requirement().id())));
+      return findNearestCandidates(request, 1).stream().findFirst();
+    }
+
+    @Override
+    public List<BlockPosition> findNearestCandidates(StructureSearchRequest request, int limit) {
+      return positions
+          .getOrDefault(
+              new SearchKey(
+                  request.seed(),
+                  request.requirement().center(),
+                  request.requirement().radiusBlocks()),
+              List.of())
+          .stream()
+          .limit(limit)
+          .toList();
     }
   }
 
-  private record SearchKey(long seed, String requirementId) {}
+  private record SearchKey(long seed, BlockPosition center, long radiusBlocks) {}
 }

@@ -67,16 +67,20 @@ public final class SeedSearchService {
       long seed, SeedSearchRequest request, List<ResolvedRequirement> resolvedRequirements) {
     int candidateLimit = resolvedRequirements.size();
     List<RequirementCandidates> requirementCandidates = new ArrayList<>(candidateLimit);
+    Map<SearchArea, List<BlockPosition>> candidatesBySearchArea = new HashMap<>();
 
     for (ResolvedRequirement resolved : resolvedRequirements) {
       StructureRequirement requirement = resolved.requirement();
 
       List<BlockPosition> positions =
-          resolved
-              .locator()
-              .findNearestCandidates(
-                  new StructureSearchRequest(seed, request.minecraftVersion(), requirement),
-                  candidateLimit);
+          candidatesBySearchArea.computeIfAbsent(
+              SearchArea.from(requirement),
+              ignored ->
+                  resolved
+                      .locator()
+                      .findNearestCandidates(
+                          new StructureSearchRequest(seed, request.minecraftVersion(), requirement),
+                          candidateLimit));
 
       requirementCandidates.add(
           new RequirementCandidates(requirement, resolved.locator().structureType(), positions));
@@ -163,4 +167,12 @@ public final class SeedSearchService {
   }
 
   private record LocatedStructure(StructureType structureType, BlockPosition position) {}
+
+  private record SearchArea(StructureType structureType, BlockPosition center, long radiusBlocks) {
+
+    private static SearchArea from(StructureRequirement requirement) {
+      return new SearchArea(
+          requirement.structureType(), requirement.center(), requirement.radiusBlocks());
+    }
+  }
 }

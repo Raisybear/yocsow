@@ -25,10 +25,10 @@ class SeedSearchServiceTest {
   void ranksCandidatesByMatchesAndNormalizedDistance() {
     RecordingVillageLocator locator = new RecordingVillageLocator();
 
-    locator.locate(10, "village-1", new BlockPosition(900, 0));
-    locator.locate(11, "village-1", new BlockPosition(600, 0));
-    locator.locate(11, "village-2", new BlockPosition(0, 800));
-    locator.locate(12, "village-1", new BlockPosition(100, 0));
+    locator.locate(10, new BlockPosition(900, 0));
+    locator.locate(11, new BlockPosition(600, 0));
+    locator.locate(11, new BlockPosition(0, 800));
+    locator.locate(12, new BlockPosition(100, 0));
 
     SeedSearchService service = serviceUsing(locator);
 
@@ -59,15 +59,16 @@ class SeedSearchServiceTest {
     assertEquals(10, third.seed());
     assertEquals(1, third.matchedRequirementCount());
     assertEquals(new BlockPosition(900, 0), third.matches().get(0).actualPosition());
+    assertEquals(3, locator.candidateSearchCount());
   }
 
   @Test
   void limitsReturnedCandidates() {
     RecordingVillageLocator locator = new RecordingVillageLocator();
 
-    locator.locate(20, "village-1", new BlockPosition(100, 0));
-    locator.locate(21, "village-1", new BlockPosition(200, 0));
-    locator.locate(22, "village-1", new BlockPosition(300, 0));
+    locator.locate(20, new BlockPosition(100, 0));
+    locator.locate(21, new BlockPosition(200, 0));
+    locator.locate(22, new BlockPosition(300, 0));
 
     SeedSearchResult result =
         serviceUsing(locator)
@@ -102,12 +103,8 @@ class SeedSearchServiceTest {
             new BlockPosition(0, 300),
             new BlockPosition(0, -400));
 
-    for (int requirementIndex = 1; requirementIndex <= 4; requirementIndex++) {
-      String requirementId = "village-" + requirementIndex;
-
-      for (BlockPosition village : villages) {
-        locator.locate(42, requirementId, village);
-      }
+    for (BlockPosition village : villages) {
+      locator.locate(42, village);
     }
 
     SeedSearchResult result =
@@ -132,6 +129,7 @@ class SeedSearchServiceTest {
     assertTrue(candidate.matchesAllRequirements());
     assertEquals(4, new HashSet<>(matchedVillages).size());
     assertEquals(new HashSet<>(villages), new HashSet<>(matchedVillages));
+    assertEquals(1, locator.candidateSearchCount());
   }
 
   @Test
@@ -206,11 +204,17 @@ class SeedSearchServiceTest {
   private static final class RecordingVillageLocator implements StructureLocator {
 
     private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
+    private int candidateSearchCount;
 
-    void locate(long seed, String requirementId, BlockPosition position) {
+    void locate(long seed, BlockPosition position) {
       positions
-          .computeIfAbsent(new SearchKey(seed, requirementId), ignored -> new ArrayList<>())
+          .computeIfAbsent(
+              new SearchKey(seed, new BlockPosition(0, 0), 1_000), ignored -> new ArrayList<>())
           .add(position);
+    }
+
+    int candidateSearchCount() {
+      return candidateSearchCount;
     }
 
     @Override
@@ -225,13 +229,20 @@ class SeedSearchServiceTest {
 
     @Override
     public List<BlockPosition> findNearestCandidates(StructureSearchRequest request, int limit) {
+      candidateSearchCount++;
+
       return positions
-          .getOrDefault(new SearchKey(request.seed(), request.requirement().id()), List.of())
+          .getOrDefault(
+              new SearchKey(
+                  request.seed(),
+                  request.requirement().center(),
+                  request.requirement().radiusBlocks()),
+              List.of())
           .stream()
           .limit(limit)
           .toList();
     }
   }
 
-  private record SearchKey(long seed, String requirementId) {}
+  private record SearchKey(long seed, BlockPosition center, long radiusBlocks) {}
 }
