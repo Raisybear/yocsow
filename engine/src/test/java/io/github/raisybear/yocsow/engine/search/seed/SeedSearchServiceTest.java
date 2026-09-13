@@ -17,6 +17,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class SeedSearchServiceTest {
@@ -91,6 +95,25 @@ class SeedSearchServiceTest {
 
     assertEquals(5, result.searchedSeedCount());
     assertTrue(result.candidates().isEmpty());
+  }
+
+  @Test
+  void evaluatesSeedsAcrossABoundedWorkerPool() {
+    ForkJoinPool workerPool = new ForkJoinPool(2);
+    ConcurrencyTrackingVillageLocator locator = new ConcurrencyTrackingVillageLocator();
+
+    try {
+      SeedSearchResult result =
+          new SeedSearchService(new StructureLocatorRegistry(List.of(locator)), workerPool)
+              .search(
+                  new SeedSearchRequest(
+                      0, 64, MinecraftVersion.JAVA_1_21, List.of(requirement("village-1")), 5));
+
+      assertEquals(64, result.searchedSeedCount());
+      assertEquals(2, locator.maximumConcurrentCalls());
+    } finally {
+      workerPool.shutdownNow();
+    }
   }
 
   @Test
@@ -204,7 +227,7 @@ class SeedSearchServiceTest {
   private static final class RecordingVillageLocator implements StructureLocator {
 
     private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
-    private int candidateSearchCount;
+    private final AtomicInteger candidateSearchCount = new AtomicInteger();
 
     void locate(long seed, BlockPosition position) {
       positions
@@ -214,7 +237,7 @@ class SeedSearchServiceTest {
     }
 
     int candidateSearchCount() {
-      return candidateSearchCount;
+      return candidateSearchCount.get();
     }
 
     @Override
@@ -229,7 +252,7 @@ class SeedSearchServiceTest {
 
     @Override
     public List<BlockPosition> findNearestCandidates(StructureSearchRequest request, int limit) {
-      candidateSearchCount++;
+      candidateSearchCount.incrementAndGet();
 
       return positions
           .getOrDefault(
@@ -241,6 +264,48 @@ class SeedSearchServiceTest {
           .stream()
           .limit(limit)
           .toList();
+    }
+  }
+
+  private static final class ConcurrencyTrackingVillageLocator implements StructureLocator {
+
+    private final AtomicInteger startedCalls = new AtomicInteger();
+    private final AtomicInteger activeCalls = new AtomicInteger();
+    private final AtomicInteger maximumConcurrentCalls = new AtomicInteger();
+    private final CountDownLatch firstTwoCallsStarted = new CountDownLatch(2);
+
+    int maximumConcurrentCalls() {
+      return maximumConcurrentCalls.get();
+    }
+
+    @Override
+    public StructureType structureType() {
+      return StructureType.VILLAGE;
+    }
+
+    @Override
+    public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+      int startedCall = startedCalls.incrementAndGet();
+      int concurrentCalls = activeCalls.incrementAndGet();
+
+      maximumConcurrentCalls.accumulateAndGet(concurrentCalls, Math::max);
+
+      try {
+        if (startedCall <= 2) {
+          firstTwoCallsStarted.countDown();
+
+          if (!firstTwoCallsStarted.await(5, TimeUnit.SECONDS)) {
+            throw new AssertionError("seed workers did not execute concurrently");
+          }
+        }
+
+        return Optional.of(new BlockPosition(0, 0));
+      } catch (InterruptedException exception) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError("seed worker was interrupted", exception);
+      } finally {
+        activeCalls.decrementAndGet();
+      }
     }
   }
 

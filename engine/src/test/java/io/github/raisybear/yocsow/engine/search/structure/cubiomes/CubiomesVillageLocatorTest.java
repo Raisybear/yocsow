@@ -11,6 +11,9 @@ import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ForkJoinPool;
+import java.util.stream.LongStream;
 import org.junit.jupiter.api.Test;
 
 class CubiomesVillageLocatorTest {
@@ -65,6 +68,31 @@ class CubiomesVillageLocatorTest {
   }
 
   @Test
+  void supportsConcurrentNativeSearches() {
+    CubiomesVillageLocator locator = new CubiomesVillageLocator();
+    List<StructureSearchRequest> requests =
+        LongStream.range(40, 72).mapToObj(this::villageRequest).toList();
+    List<Optional<BlockPosition>> expectedResults =
+        requests.stream().map(locator::findNearest).toList();
+    ForkJoinPool workerPool = new ForkJoinPool(4);
+
+    try {
+      List<CompletableFuture<Optional<BlockPosition>>> searches =
+          requests.stream()
+              .map(
+                  request ->
+                      CompletableFuture.supplyAsync(() -> locator.findNearest(request), workerPool))
+              .toList();
+      List<Optional<BlockPosition>> actualResults =
+          searches.stream().map(CompletableFuture::join).toList();
+
+      assertEquals(expectedResults, actualResults);
+    } finally {
+      workerPool.shutdownNow();
+    }
+  }
+
+  @Test
   void reportsSearchAreasOutsideMinecraftCoordinates() {
     RecordingNativeLibrary nativeLibrary = new RecordingNativeLibrary();
 
@@ -94,11 +122,15 @@ class CubiomesVillageLocatorTest {
   }
 
   private StructureSearchRequest villageRequest() {
+    return villageRequest(42);
+  }
+
+  private StructureSearchRequest villageRequest(long seed) {
     StructureRequirement requirement =
         new StructureRequirement(
             "village-1", StructureType.VILLAGE, new BlockPosition(100, -200), 1_000);
 
-    return new StructureSearchRequest(42, MinecraftVersion.JAVA_1_21, requirement);
+    return new StructureSearchRequest(seed, MinecraftVersion.JAVA_1_21, requirement);
   }
 
   private static final class RecordingNativeLibrary implements CubiomesNativeLibrary {
