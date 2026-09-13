@@ -25,6 +25,19 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+val benchmark = sourceSets.create("benchmark") {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+
+configurations[benchmark.implementationConfigurationName].extendsFrom(
+    configurations.implementation.get(),
+)
+
+configurations[benchmark.runtimeOnlyConfigurationName].extendsFrom(
+    configurations.runtimeOnly.get(),
+)
+
 val hostOperatingSystem =
     System.getProperty("os.name").lowercase()
 
@@ -172,4 +185,20 @@ spotless {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.register<JavaExec>("benchmarkSeedSearch") {
+    group = "verification"
+    description = "Measures deterministic seed-search throughput."
+
+    dependsOn(benchmark.classesTaskName)
+
+    classpath = benchmark.runtimeClasspath
+    mainClass.set("io.github.raisybear.yocsow.engine.search.seed.SeedSearchBenchmark")
+
+    args(
+        providers.gradleProperty("seedSearchBenchmarkScenario").getOrElse("shared"),
+        providers.gradleProperty("seedSearchBenchmarkSeedCount").getOrElse("10000"),
+        providers.gradleProperty("seedSearchBenchmarkIterations").getOrElse("3"),
+    )
 }
