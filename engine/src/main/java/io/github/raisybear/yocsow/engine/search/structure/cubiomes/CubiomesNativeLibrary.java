@@ -20,6 +20,7 @@ interface CubiomesNativeLibrary extends Library {
             switch (method.getName()) {
               case "findVillages" -> "yocsow_find_villages";
               case "findVillagesBatch" -> "yocsow_find_villages_batch";
+              case "searchVillageSeeds" -> "yocsow_search_village_seeds";
               default -> method.getName();
             };
 
@@ -50,4 +51,19 @@ interface CubiomesNativeLibrary extends Library {
       Pointer resultCounts,
       long resultPositionCapacity,
       Pointer results);
+
+  int searchVillageSeeds(
+      int minecraftVersion,
+      long firstSeed,
+      int seedCount,
+      Pointer searchAreas,
+      int searchAreaCount,
+      Pointer requirementSearchAreaIndexes,
+      int requirementCount,
+      int resultCapacity,
+      int candidateCapacity,
+      Pointer candidateCount,
+      Pointer candidates,
+      long matchCapacity,
+      Pointer matches);
 }

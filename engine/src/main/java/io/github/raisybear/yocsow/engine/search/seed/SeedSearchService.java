@@ -15,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinWorkerThread;
@@ -89,6 +90,19 @@ public final class SeedSearchService {
   private List<SeedSearchCandidate> evaluateSeedRange(
       SeedSearchRequest request, SearchPlan searchPlan, int firstOffset, int endOffset) {
     int seedCount = endOffset - firstOffset;
+
+    if (searchPlan.seedSearchKernel().isPresent()) {
+      SeedSearchRequest kernelRequest =
+          new SeedSearchRequest(
+              request.firstSeed() + firstOffset,
+              seedCount,
+              request.minecraftVersion(),
+              request.requirements(),
+              request.resultLimit());
+
+      return searchPlan.seedSearchKernel().orElseThrow().searchSeeds(kernelRequest);
+    }
+
     int candidateLimit = searchPlan.requirements().size();
 
     List<List<List<BlockPosition>>> candidatesBySeed =
@@ -196,7 +210,14 @@ public final class SeedSearchService {
           new PlannedLocatorBatch(entry.getKey(), entry.getValue(), batchRequirements));
     }
 
-    return new SearchPlan(plannedRequirements, plannedSearches, locatorBatches);
+    Optional<SeedSearchKernel> seedSearchKernel = Optional.empty();
+
+    if (locatorBatches.size() == 1
+        && locatorBatches.getFirst().locator() instanceof SeedSearchKernel kernel) {
+      seedSearchKernel = Optional.of(kernel);
+    }
+
+    return new SearchPlan(plannedRequirements, plannedSearches, locatorBatches, seedSearchKernel);
   }
 
   private SeedSearchCandidate evaluateCandidate(
@@ -283,12 +304,14 @@ public final class SeedSearchService {
   private record SearchPlan(
       List<PlannedRequirement> requirements,
       List<PlannedSearch> searches,
-      List<PlannedLocatorBatch> locatorBatches) {
+      List<PlannedLocatorBatch> locatorBatches,
+      Optional<SeedSearchKernel> seedSearchKernel) {
 
     private SearchPlan {
       requirements = List.copyOf(requirements);
       searches = List.copyOf(searches);
       locatorBatches = List.copyOf(locatorBatches);
+      seedSearchKernel = Objects.requireNonNull(seedSearchKernel, "seedSearchKernel");
     }
   }
 
