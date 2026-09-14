@@ -8,15 +8,52 @@ script_directory="$(
 )"
 project_root="$(cd -- "$script_directory/.." && pwd)"
 native_build_directory="$project_root/build/native"
+verification_log_directory="$project_root/build/verification-logs"
+verification_verbose="${YOCSOW_VERIFY_VERBOSE:-0}"
+step_number=0
 
 cd "$project_root"
+mkdir -p "$verification_log_directory"
 
 run_step() {
   local label="$1"
   shift
 
-  printf '\n==> %s\n' "$label"
-  "$@"
+  step_number=$((step_number + 1))
+
+  local log_file
+  local status
+
+  printf -v log_file \
+    '%s/%02d.log' \
+    "$verification_log_directory" \
+    "$step_number"
+
+  if [[ "$verification_verbose" == "1" ]]; then
+    printf '\n==> %s\n' "$label"
+
+    if "$@" 2>&1 | tee "$log_file"; then
+      return
+    else
+      status=$?
+    fi
+
+    printf '\nFAIL %s\n' "$label" >&2
+    return "$status"
+  fi
+
+  if "$@" >"$log_file" 2>&1; then
+    printf 'OK   %s\n' "$label"
+    return
+  else
+    status=$?
+  fi
+
+  printf 'FAIL %s\n\n' "$label" >&2
+  sed -n '1,$p' "$log_file" >&2
+  printf '\nFull log: %s\n' "$log_file" >&2
+
+  return "$status"
 }
 
 run_step \
@@ -99,3 +136,4 @@ run_step \
     --locked
 
 printf '\nAll YOCSOW project checks passed.\n'
+printf 'Full logs: %s\n' "$verification_log_directory"
