@@ -148,6 +148,100 @@ static void insert_candidate(
   *result_count = new_count;
 }
 
+static void find_villages_with_generator(
+    int mc,
+    uint64_t seed,
+    const StructureConfig *structure_config,
+    Generator *generator,
+    int64_t center_x,
+    int64_t center_z,
+    int64_t radius_blocks,
+    int32_t result_capacity,
+    int32_t *result_count,
+    struct YocsowBlockPosition *results) {
+  int32_t region_size_blocks =
+      structure_config->regionSize * 16;
+
+  int32_t minimum_region_x =
+      floor_divide(
+          center_x - radius_blocks,
+          region_size_blocks);
+
+  int32_t maximum_region_x =
+      floor_divide(
+          center_x + radius_blocks,
+          region_size_blocks);
+
+  int32_t minimum_region_z =
+      floor_divide(
+          center_z - radius_blocks,
+          region_size_blocks);
+
+  int32_t maximum_region_z =
+      floor_divide(
+          center_z + radius_blocks,
+          region_size_blocks);
+
+  int64_t maximum_distance_squared =
+      radius_blocks * radius_blocks;
+
+  *result_count = 0;
+
+  for (int32_t region_x = minimum_region_x;
+       region_x <= maximum_region_x;
+       region_x++) {
+    for (int32_t region_z = minimum_region_z;
+         region_z <= maximum_region_z;
+         region_z++) {
+      Pos candidate;
+
+      if (!getStructurePos(
+              Village,
+              mc,
+              seed,
+              region_x,
+              region_z,
+              &candidate)) {
+        continue;
+      }
+
+      if (distance_squared(
+              center_x,
+              center_z,
+              &candidate) >
+          maximum_distance_squared) {
+        continue;
+      }
+
+      if (*result_count == result_capacity &&
+          !candidate_is_better(
+              center_x,
+              center_z,
+              &candidate,
+              &results[result_capacity - 1])) {
+        continue;
+      }
+
+      if (!isViableStructurePos(
+              Village,
+              generator,
+              candidate.x,
+              candidate.z,
+              0)) {
+        continue;
+      }
+
+      insert_candidate(
+          center_x,
+          center_z,
+          &candidate,
+          result_capacity,
+          result_count,
+          results);
+    }
+  }
+}
+
 int32_t yocsow_find_nearest_village(
     int32_t minecraft_version,
     int64_t seed,
@@ -233,29 +327,6 @@ int32_t yocsow_find_villages(
     return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
   }
 
-  int32_t region_size_blocks =
-      structure_config.regionSize * 16;
-
-  int32_t minimum_region_x =
-      floor_divide(
-          center_x - radius_blocks,
-          region_size_blocks);
-
-  int32_t maximum_region_x =
-      floor_divide(
-          center_x + radius_blocks,
-          region_size_blocks);
-
-  int32_t minimum_region_z =
-      floor_divide(
-          center_z - radius_blocks,
-          region_size_blocks);
-
-  int32_t maximum_region_z =
-      floor_divide(
-          center_z + radius_blocks,
-          region_size_blocks);
-
   Generator generator;
   setupGenerator(&generator, mc, 0);
 
@@ -264,60 +335,136 @@ int32_t yocsow_find_villages(
       DIM_OVERWORLD,
       (uint64_t)seed);
 
-  int64_t maximum_distance_squared =
-      radius_blocks * radius_blocks;
+  find_villages_with_generator(
+      mc,
+      (uint64_t)seed,
+      &structure_config,
+      &generator,
+      center_x,
+      center_z,
+      radius_blocks,
+      result_capacity,
+      result_count,
+      results);
 
-  for (int32_t region_x = minimum_region_x;
-       region_x <= maximum_region_x;
-       region_x++) {
-    for (int32_t region_z = minimum_region_z;
-         region_z <= maximum_region_z;
-         region_z++) {
-      Pos candidate;
+  return YOCSOW_CUBIOMES_OK;
+}
 
-      if (!getStructurePos(
-              Village,
-              mc,
-              (uint64_t)seed,
-              region_x,
-              region_z,
-              &candidate)) {
-        continue;
-      }
+int32_t yocsow_find_villages_batch(
+    int32_t minecraft_version,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowVillageSearchArea *search_areas,
+    int32_t search_area_count,
+    int32_t result_capacity,
+    int64_t result_count_capacity,
+    int32_t *result_counts,
+    int64_t result_position_capacity,
+    struct YocsowBlockPosition *results) {
+  if (search_areas == NULL ||
+      result_counts == NULL ||
+      results == NULL ||
+      seed_count <= 0 ||
+      seed_count > YOCSOW_MAX_VILLAGE_BATCH_SEEDS ||
+      search_area_count <= 0 ||
+      search_area_count >
+          YOCSOW_MAX_VILLAGE_SEARCH_AREAS ||
+      result_capacity <= 0 ||
+      result_capacity > YOCSOW_MAX_VILLAGE_RESULTS ||
+      result_count_capacity < 0 ||
+      result_position_capacity < 0) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
 
-      if (distance_squared(
-              center_x,
-              center_z,
-              &candidate) >
-          maximum_distance_squared) {
-        continue;
-      }
+  if (first_seed >
+      INT64_MAX - (int64_t)(seed_count - 1)) {
+    return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+  }
 
-      if (*result_count == result_capacity &&
-          !candidate_is_better(
-              center_x,
-              center_z,
-              &candidate,
-              &results[result_capacity - 1])) {
-        continue;
-      }
+  int mc = cubiomes_version(minecraft_version);
 
-      if (!isViableStructurePos(
-              Village,
-              &generator,
-              candidate.x,
-              candidate.z,
-              0)) {
-        continue;
-      }
+  if (mc == MC_UNDEF) {
+    return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
+  }
 
-      insert_candidate(
-          center_x,
-          center_z,
-          &candidate,
+  for (int32_t search_area_index = 0;
+       search_area_index < search_area_count;
+       search_area_index++) {
+    const struct YocsowVillageSearchArea *search_area =
+        &search_areas[search_area_index];
+
+    if (search_area->radius_blocks <= 0) {
+      return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+    }
+
+    if (!search_area_is_valid(
+            search_area->center_x,
+            search_area->center_z,
+            search_area->radius_blocks)) {
+      return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+    }
+  }
+
+  int64_t required_result_counts =
+      (int64_t)seed_count * search_area_count;
+
+  int64_t required_result_positions =
+      required_result_counts * result_capacity;
+
+  if (result_count_capacity < required_result_counts ||
+      result_position_capacity <
+          required_result_positions) {
+    return YOCSOW_CUBIOMES_BUFFER_TOO_SMALL;
+  }
+
+  StructureConfig structure_config;
+
+  if (!getStructureConfig(
+          Village,
+          mc,
+          &structure_config)) {
+    return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
+  }
+
+  Generator generator;
+  setupGenerator(&generator, mc, 0);
+
+  for (int32_t seed_index = 0;
+       seed_index < seed_count;
+       seed_index++) {
+    uint64_t seed =
+        (uint64_t)first_seed +
+        (uint64_t)seed_index;
+
+    applySeed(
+        &generator,
+        DIM_OVERWORLD,
+        seed);
+
+    for (int32_t search_area_index = 0;
+         search_area_index < search_area_count;
+         search_area_index++) {
+      int64_t result_count_index =
+          (int64_t)seed_index * search_area_count +
+          search_area_index;
+
+      int64_t result_position_index =
+          result_count_index * result_capacity;
+
+      const struct YocsowVillageSearchArea *search_area =
+          &search_areas[search_area_index];
+
+      find_villages_with_generator(
+          mc,
+          seed,
+          &structure_config,
+          &generator,
+          search_area->center_x,
+          search_area->center_z,
+          search_area->radius_blocks,
           result_capacity,
-          result_count,
-          results);
+          &result_counts[result_count_index],
+          &results[result_position_index]);
     }
   }
 
