@@ -10,6 +10,7 @@ import io.github.raisybear.yocsow.engine.search.StructureRequirement;
 import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocator;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegistry;
+import io.github.raisybear.yocsow.engine.search.structure.StructureSearchBatchRequest;
 import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -117,6 +118,110 @@ class SeedSearchServiceTest {
   }
 
   @Test
+  void batchesSeedRangesWithinWorkerTasks() {
+    ForkJoinPool workerPool = new ForkJoinPool(1);
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+
+    try {
+      new SeedSearchService(new StructureLocatorRegistry(List.of(locator)), workerPool)
+          .search(
+              new SeedSearchRequest(
+                  0, 8, MinecraftVersion.JAVA_1_21, List.of(requirement("village-1")), 5));
+
+      assertEquals(4, locator.batchSearchCount());
+      assertEquals(2, locator.largestBatchSeedCount());
+      assertEquals(8, locator.candidateSearchCount());
+    } finally {
+      workerPool.shutdownNow();
+    }
+  }
+
+  @Test
+  void rejectsIncompleteLocatorBatchResults() {
+    StructureLocator locator =
+        new StructureLocator() {
+          @Override
+          public StructureType structureType() {
+            return StructureType.VILLAGE;
+          }
+
+          @Override
+          public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+            return Optional.empty();
+          }
+
+          @Override
+          public List<List<BlockPosition>> findNearestCandidatesBatch(
+              StructureSearchBatchRequest request, int limit) {
+            return List.of();
+          }
+        };
+
+    IllegalStateException error =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                serviceUsing(locator)
+                    .search(
+                        new SeedSearchRequest(
+                            42,
+                            1,
+                            MinecraftVersion.JAVA_1_21,
+                            List.of(requirement("village-1")),
+                            1)));
+
+    assertTrue(
+        error.getMessage().contains("structure locator returned 0 batch results instead of 1"));
+  }
+
+  @Test
+  void resolvesSharedSearchMetadataBeforeEvaluatingSeeds() {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+
+    serviceUsing(locator)
+        .search(
+            new SeedSearchRequest(
+                0,
+                8,
+                MinecraftVersion.JAVA_1_21,
+                List.of(requirement("village-1"), requirement("village-2")),
+                5));
+
+    assertEquals(1, locator.structureTypeQueryCount());
+    assertEquals(8, locator.candidateSearchCount());
+  }
+
+  @Test
+  void mapsRequirementsToTheirPrecomputedSearchAreas() {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+    BlockPosition spawn = new BlockPosition(0, 0);
+    BlockPosition remoteCenter = new BlockPosition(9_000, 0);
+
+    locator.locate(42, spawn, new BlockPosition(100, 0));
+    locator.locate(42, remoteCenter, new BlockPosition(9_100, 0));
+
+    SeedSearchResult result =
+        serviceUsing(locator)
+            .search(
+                new SeedSearchRequest(
+                    42,
+                    1,
+                    MinecraftVersion.JAVA_1_21,
+                    List.of(
+                        requirement("spawn-village", spawn),
+                        requirement("remote-village", remoteCenter)),
+                    1));
+
+    SeedSearchCandidate candidate = result.candidates().getFirst();
+
+    assertEquals(2, locator.candidateSearchCount());
+    assertEquals(
+        List.of("spawn-village", "remote-village"),
+        candidate.matches().stream().map(StructureMatch::requirementId).toList());
+    assertTrue(candidate.matchesAllRequirements());
+  }
+
+  @Test
   void assignsDistinctVillagesToRequirementsWithTheSameSearchArea() {
     RecordingVillageLocator locator = new RecordingVillageLocator();
     List<BlockPosition> villages =
@@ -221,18 +326,28 @@ class SeedSearchServiceTest {
   }
 
   private StructureRequirement requirement(String id) {
-    return new StructureRequirement(id, StructureType.VILLAGE, new BlockPosition(0, 0), 1_000);
+    return requirement(id, new BlockPosition(0, 0));
+  }
+
+  private StructureRequirement requirement(String id, BlockPosition center) {
+    return new StructureRequirement(id, StructureType.VILLAGE, center, 1_000);
   }
 
   private static final class RecordingVillageLocator implements StructureLocator {
 
     private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
     private final AtomicInteger candidateSearchCount = new AtomicInteger();
+    private final AtomicInteger batchSearchCount = new AtomicInteger();
+    private final AtomicInteger largestBatchSeedCount = new AtomicInteger();
+    private final AtomicInteger structureTypeQueryCount = new AtomicInteger();
 
     void locate(long seed, BlockPosition position) {
+      locate(seed, new BlockPosition(0, 0), position);
+    }
+
+    void locate(long seed, BlockPosition center, BlockPosition position) {
       positions
-          .computeIfAbsent(
-              new SearchKey(seed, new BlockPosition(0, 0), 1_000), ignored -> new ArrayList<>())
+          .computeIfAbsent(new SearchKey(seed, center, 1_000), ignored -> new ArrayList<>())
           .add(position);
     }
 
@@ -240,8 +355,21 @@ class SeedSearchServiceTest {
       return candidateSearchCount.get();
     }
 
+    int structureTypeQueryCount() {
+      return structureTypeQueryCount.get();
+    }
+
+    int batchSearchCount() {
+      return batchSearchCount.get();
+    }
+
+    int largestBatchSeedCount() {
+      return largestBatchSeedCount.get();
+    }
+
     @Override
     public StructureType structureType() {
+      structureTypeQueryCount.incrementAndGet();
       return StructureType.VILLAGE;
     }
 
@@ -264,6 +392,35 @@ class SeedSearchServiceTest {
           .stream()
           .limit(limit)
           .toList();
+    }
+
+    @Override
+    public List<List<BlockPosition>> findNearestCandidatesBatch(
+        StructureSearchBatchRequest request, int limit) {
+      batchSearchCount.incrementAndGet();
+      largestBatchSeedCount.accumulateAndGet(request.seedCount(), Math::max);
+
+      List<List<BlockPosition>> candidates =
+          new ArrayList<>(request.seedCount() * request.requirements().size());
+
+      for (int seedOffset = 0; seedOffset < request.seedCount(); seedOffset++) {
+        long seed = request.firstSeed() + seedOffset;
+
+        for (StructureRequirement requirement : request.requirements()) {
+          candidateSearchCount.incrementAndGet();
+
+          candidates.add(
+              positions
+                  .getOrDefault(
+                      new SearchKey(seed, requirement.center(), requirement.radiusBlocks()),
+                      List.of())
+                  .stream()
+                  .limit(limit)
+                  .toList());
+        }
+      }
+
+      return List.copyOf(candidates);
     }
   }
 

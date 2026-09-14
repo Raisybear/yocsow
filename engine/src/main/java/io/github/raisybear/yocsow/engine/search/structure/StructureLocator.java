@@ -2,7 +2,9 @@ package io.github.raisybear.yocsow.engine.search.structure;
 
 import io.github.raisybear.yocsow.engine.search.BlockPosition;
 import io.github.raisybear.yocsow.engine.search.StructureType;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -29,5 +31,38 @@ public interface StructureLocator {
     }
 
     return findNearest(request).stream().toList();
+  }
+
+  /**
+   * Finds candidates for consecutive seeds and multiple requirements.
+   *
+   * <p>The returned list uses seed-major order: all requirements for the first seed, followed by
+   * all requirements for the next seed. Implementations can override this scalar fallback with a
+   * native batch operation.
+   */
+  default List<List<BlockPosition>> findNearestCandidatesBatch(
+      StructureSearchBatchRequest request, int limit) {
+    Objects.requireNonNull(request, "request");
+
+    if (limit <= 0) {
+      throw new IllegalArgumentException("limit must be greater than zero");
+    }
+
+    List<List<BlockPosition>> candidates =
+        new ArrayList<>(Math.multiplyExact(request.seedCount(), request.requirements().size()));
+
+    for (int seedOffset = 0; seedOffset < request.seedCount(); seedOffset++) {
+      long seed = request.firstSeed() + seedOffset;
+
+      for (var requirement : request.requirements()) {
+        candidates.add(
+            List.copyOf(
+                findNearestCandidates(
+                    new StructureSearchRequest(seed, request.minecraftVersion(), requirement),
+                    limit)));
+      }
+    }
+
+    return List.copyOf(candidates);
   }
 }

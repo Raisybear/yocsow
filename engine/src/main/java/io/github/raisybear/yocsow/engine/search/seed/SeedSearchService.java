@@ -5,12 +5,13 @@ import io.github.raisybear.yocsow.engine.search.StructureRequirement;
 import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocator;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegistry;
-import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
+import io.github.raisybear.yocsow.engine.search.structure.StructureSearchBatchRequest;
 import java.io.Serial;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,13 +48,12 @@ public final class SeedSearchService {
   public SeedSearchResult search(SeedSearchRequest request) {
     Objects.requireNonNull(request, "request");
 
-    List<ResolvedRequirement> resolvedRequirements = resolveRequirements(request.requirements());
+    SearchPlan searchPlan = createSearchPlan(request.requirements());
 
     int taskSize = taskSize(request.seedCount(), workerPool.getParallelism());
     List<SeedSearchCandidate> candidates =
         workerPool.invoke(
-            new EvaluateSeedRangeTask(
-                request, resolvedRequirements, 0, request.seedCount(), taskSize));
+            new EvaluateSeedRangeTask(request, searchPlan, 0, request.seedCount(), taskSize));
 
     candidates.sort(BEST_CANDIDATE_FIRST);
 
@@ -87,15 +87,54 @@ public final class SeedSearchService {
   }
 
   private List<SeedSearchCandidate> evaluateSeedRange(
-      SeedSearchRequest request,
-      List<ResolvedRequirement> resolvedRequirements,
-      int firstOffset,
-      int endOffset) {
-    List<SeedSearchCandidate> candidates = new ArrayList<>(endOffset - firstOffset);
+      SeedSearchRequest request, SearchPlan searchPlan, int firstOffset, int endOffset) {
+    int seedCount = endOffset - firstOffset;
+    int candidateLimit = searchPlan.requirements().size();
+
+    List<List<List<BlockPosition>>> candidatesBySeed =
+        createCandidateGrid(seedCount, searchPlan.searches().size());
+
+    for (PlannedLocatorBatch batch : searchPlan.locatorBatches()) {
+      StructureSearchBatchRequest batchRequest =
+          new StructureSearchBatchRequest(
+              request.firstSeed() + firstOffset,
+              seedCount,
+              request.minecraftVersion(),
+              batch.requirements());
+
+      List<List<BlockPosition>> batchCandidates =
+          batch.locator().findNearestCandidatesBatch(batchRequest, candidateLimit);
+
+      int expectedResultCount = Math.multiplyExact(seedCount, batch.searchIndexes().size());
+
+      if (batchCandidates.size() != expectedResultCount) {
+        throw new IllegalStateException(
+            "structure locator returned "
+                + batchCandidates.size()
+                + " batch results instead of "
+                + expectedResultCount);
+      }
+
+      int batchResultIndex = 0;
+
+      for (int seedIndex = 0; seedIndex < seedCount; seedIndex++) {
+        for (int searchIndex : batch.searchIndexes()) {
+          candidatesBySeed
+              .get(seedIndex)
+              .set(searchIndex, List.copyOf(batchCandidates.get(batchResultIndex)));
+
+          batchResultIndex++;
+        }
+      }
+    }
+
+    List<SeedSearchCandidate> candidates = new ArrayList<>(seedCount);
 
     for (int offset = firstOffset; offset < endOffset; offset++) {
       long seed = request.firstSeed() + offset;
-      SeedSearchCandidate candidate = evaluateSeed(seed, request, resolvedRequirements);
+
+      SeedSearchCandidate candidate =
+          evaluateCandidate(seed, searchPlan, candidatesBySeed.get(offset - firstOffset));
 
       if (candidate.matchedRequirementCount() > 0) {
         candidates.add(candidate);
@@ -105,62 +144,90 @@ public final class SeedSearchService {
     return candidates;
   }
 
-  private List<ResolvedRequirement> resolveRequirements(List<StructureRequirement> requirements) {
-    return requirements.stream()
-        .map(
-            requirement ->
-                new ResolvedRequirement(
-                    requirement, locatorRegistry.require(requirement.structureType())))
-        .toList();
-  }
+  private List<List<List<BlockPosition>>> createCandidateGrid(int seedCount, int searchCount) {
+    List<List<List<BlockPosition>>> candidatesBySeed = new ArrayList<>(seedCount);
 
-  private SeedSearchCandidate evaluateSeed(
-      long seed, SeedSearchRequest request, List<ResolvedRequirement> resolvedRequirements) {
-    int candidateLimit = resolvedRequirements.size();
-    List<RequirementCandidates> requirementCandidates = new ArrayList<>(candidateLimit);
-    Map<SearchArea, List<BlockPosition>> candidatesBySearchArea = new HashMap<>();
+    for (int seedIndex = 0; seedIndex < seedCount; seedIndex++) {
+      List<List<BlockPosition>> candidatesBySearch = new ArrayList<>(searchCount);
 
-    for (ResolvedRequirement resolved : resolvedRequirements) {
-      StructureRequirement requirement = resolved.requirement();
+      for (int searchIndex = 0; searchIndex < searchCount; searchIndex++) {
+        candidatesBySearch.add(List.of());
+      }
 
-      List<BlockPosition> positions =
-          candidatesBySearchArea.computeIfAbsent(
-              SearchArea.from(requirement),
-              ignored ->
-                  resolved
-                      .locator()
-                      .findNearestCandidates(
-                          new StructureSearchRequest(seed, request.minecraftVersion(), requirement),
-                          candidateLimit));
-
-      requirementCandidates.add(
-          new RequirementCandidates(requirement, resolved.locator().structureType(), positions));
+      candidatesBySeed.add(candidatesBySearch);
     }
 
-    List<StructureMatch> matches = assignDistinctStructures(requirementCandidates);
+    return candidatesBySeed;
+  }
 
-    return new SeedSearchCandidate(seed, resolvedRequirements.size(), matches);
+  private SearchPlan createSearchPlan(List<StructureRequirement> requirements) {
+    List<PlannedRequirement> plannedRequirements = new ArrayList<>(requirements.size());
+    List<PlannedSearch> plannedSearches = new ArrayList<>();
+    Map<SearchArea, Integer> searchIndexes = new HashMap<>();
+    Map<StructureLocator, List<Integer>> searchIndexesByLocator = new LinkedHashMap<>();
+
+    for (StructureRequirement requirement : requirements) {
+      StructureLocator locator = locatorRegistry.require(requirement.structureType());
+      SearchArea searchArea = SearchArea.from(requirement);
+      Integer searchIndex = searchIndexes.get(searchArea);
+
+      if (searchIndex == null) {
+        searchIndex = plannedSearches.size();
+        searchIndexes.put(searchArea, searchIndex);
+        plannedSearches.add(new PlannedSearch(requirement));
+        searchIndexesByLocator
+            .computeIfAbsent(locator, ignored -> new ArrayList<>())
+            .add(searchIndex);
+      }
+
+      plannedRequirements.add(
+          new PlannedRequirement(requirement, requirement.structureType(), searchIndex));
+    }
+
+    List<PlannedLocatorBatch> locatorBatches = new ArrayList<>(searchIndexesByLocator.size());
+
+    for (Map.Entry<StructureLocator, List<Integer>> entry : searchIndexesByLocator.entrySet()) {
+      List<StructureRequirement> batchRequirements =
+          entry.getValue().stream()
+              .map(searchIndex -> plannedSearches.get(searchIndex).representativeRequirement())
+              .toList();
+
+      locatorBatches.add(
+          new PlannedLocatorBatch(entry.getKey(), entry.getValue(), batchRequirements));
+    }
+
+    return new SearchPlan(plannedRequirements, plannedSearches, locatorBatches);
+  }
+
+  private SeedSearchCandidate evaluateCandidate(
+      long seed, SearchPlan searchPlan, List<List<BlockPosition>> candidatesBySearch) {
+    List<StructureMatch> matches = assignDistinctStructures(searchPlan, candidatesBySearch);
+
+    return new SeedSearchCandidate(seed, searchPlan.requirements().size(), matches);
   }
 
   private List<StructureMatch> assignDistinctStructures(
-      List<RequirementCandidates> requirementCandidates) {
-    List<Integer> assignmentOrder = new ArrayList<>(requirementCandidates.size());
+      SearchPlan searchPlan, List<List<BlockPosition>> candidatesBySearch) {
+    List<Integer> assignmentOrder = new ArrayList<>(searchPlan.requirements().size());
 
-    for (int index = 0; index < requirementCandidates.size(); index++) {
+    for (int index = 0; index < searchPlan.requirements().size(); index++) {
       assignmentOrder.add(index);
     }
 
     assignmentOrder.sort(
         Comparator.comparingInt(
-                (Integer index) -> requirementCandidates.get(index).positions().size())
+                (Integer index) ->
+                    candidatesBySearch
+                        .get(searchPlan.requirements().get(index).searchIndex())
+                        .size())
             .thenComparingInt(Integer::intValue));
 
-    BlockPosition[] assignments = new BlockPosition[requirementCandidates.size()];
+    BlockPosition[] assignments = new BlockPosition[searchPlan.requirements().size()];
     Map<LocatedStructure, Integer> owners = new HashMap<>();
 
     for (int requirementIndex : assignmentOrder) {
       assignRequirement(
-          requirementIndex, requirementCandidates, assignments, owners, new HashSet<>());
+          requirementIndex, searchPlan, candidatesBySearch, assignments, owners, new HashSet<>());
     }
 
     List<StructureMatch> matches = new ArrayList<>();
@@ -169,7 +236,8 @@ public final class SeedSearchService {
       BlockPosition position = assignments[index];
 
       if (position != null) {
-        matches.add(StructureMatch.from(requirementCandidates.get(index).requirement(), position));
+        matches.add(
+            StructureMatch.from(searchPlan.requirements().get(index).requirement(), position));
       }
     }
 
@@ -178,14 +246,16 @@ public final class SeedSearchService {
 
   private boolean assignRequirement(
       int requirementIndex,
-      List<RequirementCandidates> requirementCandidates,
+      SearchPlan searchPlan,
+      List<List<BlockPosition>> candidatesBySearch,
       BlockPosition[] assignments,
       Map<LocatedStructure, Integer> owners,
       Set<LocatedStructure> visitedStructures) {
-    RequirementCandidates candidates = requirementCandidates.get(requirementIndex);
+    PlannedRequirement requirement = searchPlan.requirements().get(requirementIndex);
+    List<BlockPosition> candidates = candidatesBySearch.get(requirement.searchIndex());
 
-    for (BlockPosition position : candidates.positions()) {
-      LocatedStructure structure = new LocatedStructure(candidates.structureType(), position);
+    for (BlockPosition position : candidates) {
+      LocatedStructure structure = new LocatedStructure(requirement.structureType(), position);
 
       if (!visitedStructures.add(structure)) {
         continue;
@@ -195,7 +265,12 @@ public final class SeedSearchService {
 
       if (currentOwner == null
           || assignRequirement(
-              currentOwner, requirementCandidates, assignments, owners, visitedStructures)) {
+              currentOwner,
+              searchPlan,
+              candidatesBySearch,
+              assignments,
+              owners,
+              visitedStructures)) {
         assignments[requirementIndex] = position;
         owners.put(structure, requirementIndex);
         return true;
@@ -205,15 +280,31 @@ public final class SeedSearchService {
     return false;
   }
 
-  private record ResolvedRequirement(StructureRequirement requirement, StructureLocator locator) {}
+  private record SearchPlan(
+      List<PlannedRequirement> requirements,
+      List<PlannedSearch> searches,
+      List<PlannedLocatorBatch> locatorBatches) {
 
-  private record RequirementCandidates(
-      StructureRequirement requirement,
-      StructureType structureType,
-      List<BlockPosition> positions) {
+    private SearchPlan {
+      requirements = List.copyOf(requirements);
+      searches = List.copyOf(searches);
+      locatorBatches = List.copyOf(locatorBatches);
+    }
+  }
 
-    private RequirementCandidates {
-      positions = List.copyOf(positions);
+  private record PlannedRequirement(
+      StructureRequirement requirement, StructureType structureType, int searchIndex) {}
+
+  private record PlannedSearch(StructureRequirement representativeRequirement) {}
+
+  private record PlannedLocatorBatch(
+      StructureLocator locator,
+      List<Integer> searchIndexes,
+      List<StructureRequirement> requirements) {
+
+    private PlannedLocatorBatch {
+      searchIndexes = List.copyOf(searchIndexes);
+      requirements = List.copyOf(requirements);
     }
   }
 
@@ -232,19 +323,19 @@ public final class SeedSearchService {
     @Serial private static final long serialVersionUID = 1L;
 
     private final SeedSearchRequest request;
-    private final List<ResolvedRequirement> resolvedRequirements;
+    private final SearchPlan searchPlan;
     private final int firstOffset;
     private final int endOffset;
     private final int taskSize;
 
     private EvaluateSeedRangeTask(
         SeedSearchRequest request,
-        List<ResolvedRequirement> resolvedRequirements,
+        SearchPlan searchPlan,
         int firstOffset,
         int endOffset,
         int taskSize) {
       this.request = request;
-      this.resolvedRequirements = resolvedRequirements;
+      this.searchPlan = searchPlan;
       this.firstOffset = firstOffset;
       this.endOffset = endOffset;
       this.taskSize = taskSize;
@@ -253,16 +344,14 @@ public final class SeedSearchService {
     @Override
     protected List<SeedSearchCandidate> compute() {
       if (endOffset - firstOffset <= taskSize) {
-        return evaluateSeedRange(request, resolvedRequirements, firstOffset, endOffset);
+        return evaluateSeedRange(request, searchPlan, firstOffset, endOffset);
       }
 
       int middleOffset = firstOffset + (endOffset - firstOffset) / 2;
       EvaluateSeedRangeTask firstTask =
-          new EvaluateSeedRangeTask(
-              request, resolvedRequirements, firstOffset, middleOffset, taskSize);
+          new EvaluateSeedRangeTask(request, searchPlan, firstOffset, middleOffset, taskSize);
       EvaluateSeedRangeTask secondTask =
-          new EvaluateSeedRangeTask(
-              request, resolvedRequirements, middleOffset, endOffset, taskSize);
+          new EvaluateSeedRangeTask(request, searchPlan, middleOffset, endOffset, taskSize);
 
       firstTask.fork();
       List<SeedSearchCandidate> secondCandidates = secondTask.compute();
