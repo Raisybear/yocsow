@@ -10,6 +10,7 @@ import io.github.raisybear.yocsow.engine.search.StructureRequirement;
 import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocator;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegistry;
+import io.github.raisybear.yocsow.engine.search.structure.StructureSearchBatchRequest;
 import io.github.raisybear.yocsow.engine.search.structure.StructureSearchRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -114,6 +115,63 @@ class SeedSearchServiceTest {
     } finally {
       workerPool.shutdownNow();
     }
+  }
+
+  @Test
+  void batchesSeedRangesWithinWorkerTasks() {
+    ForkJoinPool workerPool = new ForkJoinPool(1);
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+
+    try {
+      new SeedSearchService(new StructureLocatorRegistry(List.of(locator)), workerPool)
+          .search(
+              new SeedSearchRequest(
+                  0, 8, MinecraftVersion.JAVA_1_21, List.of(requirement("village-1")), 5));
+
+      assertEquals(4, locator.batchSearchCount());
+      assertEquals(2, locator.largestBatchSeedCount());
+      assertEquals(8, locator.candidateSearchCount());
+    } finally {
+      workerPool.shutdownNow();
+    }
+  }
+
+  @Test
+  void rejectsIncompleteLocatorBatchResults() {
+    StructureLocator locator =
+        new StructureLocator() {
+          @Override
+          public StructureType structureType() {
+            return StructureType.VILLAGE;
+          }
+
+          @Override
+          public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+            return Optional.empty();
+          }
+
+          @Override
+          public List<List<BlockPosition>> findNearestCandidatesBatch(
+              StructureSearchBatchRequest request, int limit) {
+            return List.of();
+          }
+        };
+
+    IllegalStateException error =
+        assertThrows(
+            IllegalStateException.class,
+            () ->
+                serviceUsing(locator)
+                    .search(
+                        new SeedSearchRequest(
+                            42,
+                            1,
+                            MinecraftVersion.JAVA_1_21,
+                            List.of(requirement("village-1")),
+                            1)));
+
+    assertTrue(
+        error.getMessage().contains("structure locator returned 0 batch results instead of 1"));
   }
 
   @Test
@@ -279,6 +337,8 @@ class SeedSearchServiceTest {
 
     private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
     private final AtomicInteger candidateSearchCount = new AtomicInteger();
+    private final AtomicInteger batchSearchCount = new AtomicInteger();
+    private final AtomicInteger largestBatchSeedCount = new AtomicInteger();
     private final AtomicInteger structureTypeQueryCount = new AtomicInteger();
 
     void locate(long seed, BlockPosition position) {
@@ -297,6 +357,14 @@ class SeedSearchServiceTest {
 
     int structureTypeQueryCount() {
       return structureTypeQueryCount.get();
+    }
+
+    int batchSearchCount() {
+      return batchSearchCount.get();
+    }
+
+    int largestBatchSeedCount() {
+      return largestBatchSeedCount.get();
     }
 
     @Override
@@ -324,6 +392,35 @@ class SeedSearchServiceTest {
           .stream()
           .limit(limit)
           .toList();
+    }
+
+    @Override
+    public List<List<BlockPosition>> findNearestCandidatesBatch(
+        StructureSearchBatchRequest request, int limit) {
+      batchSearchCount.incrementAndGet();
+      largestBatchSeedCount.accumulateAndGet(request.seedCount(), Math::max);
+
+      List<List<BlockPosition>> candidates =
+          new ArrayList<>(request.seedCount() * request.requirements().size());
+
+      for (int seedOffset = 0; seedOffset < request.seedCount(); seedOffset++) {
+        long seed = request.firstSeed() + seedOffset;
+
+        for (StructureRequirement requirement : request.requirements()) {
+          candidateSearchCount.incrementAndGet();
+
+          candidates.add(
+              positions
+                  .getOrDefault(
+                      new SearchKey(seed, requirement.center(), requirement.radiusBlocks()),
+                      List.of())
+                  .stream()
+                  .limit(limit)
+                  .toList());
+        }
+      }
+
+      return List.copyOf(candidates);
     }
   }
 
