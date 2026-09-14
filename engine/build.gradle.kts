@@ -200,5 +200,10 @@ tasks.register<JavaExec>("benchmarkSeedSearch") {
         providers.gradleProperty("seedSearchBenchmarkScenario").getOrElse("shared"),
         providers.gradleProperty("seedSearchBenchmarkSeedCount").getOrElse("10000"),
         providers.gradleProperty("seedSearchBenchmarkIterations").getOrElse("3"),
+        providers.gradleProperty("seedSearchBenchmarkWarmupSeedCount").getOrElse("2000"),
+        providers.gradleProperty("seedSearchBenchmarkResultLimit").getOrElse("20"),
+        providers
+            .gradleProperty("seedSearchBenchmarkParallelism")
+            .getOrElse(Runtime.getRuntime().availableProcessors().toString()),
     )
 }
