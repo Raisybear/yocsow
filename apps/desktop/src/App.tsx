@@ -1,58 +1,124 @@
+import { useState } from 'react'
+import {
+  AppSidebar,
+  type WorkspaceView,
+} from './components/AppSidebar'
 import { ProjectWorkspace } from './components/ProjectWorkspace'
-import { SearchRequirementsPanel } from './components/SearchRequirementsPanel'
-import { SeedFinderPanel } from './components/SeedFinderPanel'
-import { SystemStatus } from './components/SystemStatus'
+import { SeedFinderWorkspace } from './components/SeedFinderWorkspace'
+import { SettingsWorkspace } from './components/SettingsWorkspace'
 import { useProjectWorkspace } from './hooks/useProjectWorkspace'
 import './App.css'
 
-const components = [
-  { name: 'Frontend', technology: 'React 19' },
-  { name: 'Build', technology: 'Vite 8' },
-  { name: 'Engine', technology: 'Java 21' },
-] as const
+const viewDetails: Record<
+  WorkspaceView,
+  { eyebrow: string; title: string; description: string }
+> = {
+  'seed-finder': {
+    eyebrow: 'Search workspace',
+    title: 'Seed finder',
+    description:
+      'Define world requirements and review matching seeds.',
+  },
+  project: {
+    eyebrow: 'Local workspace',
+    title: 'Project management',
+    description:
+      'Create, open and save local YOCSOW project files.',
+  },
+  'world-editor': {
+    eyebrow: 'World tools',
+    title: 'World editor',
+    description:
+      'Inspect and edit generated worlds from one workspace.',
+  },
+  settings: {
+    eyebrow: 'Application',
+    title: 'Settings',
+    description:
+      'Configure search, engine and storage preferences.',
+  },
+}
 
 function App() {
   const workspace = useProjectWorkspace()
+  const [activeView, setActiveView] =
+    useState<WorkspaceView>('seed-finder')
+  const [defaultResultLimit, setDefaultResultLimit] =
+    useState('20')
+  const activeViewDetails = viewDetails[activeView]
 
   return (
     <main className="app-shell">
-      <section
-        className="welcome-card"
-        aria-labelledby="app-title"
-      >
-        <header className="app-header">
-          <div>
-            <p className="eyebrow">YOCSOW</p>
-            <h1 id="app-title">Your world. Your rules.</h1>
+      <AppSidebar
+        activeView={activeView}
+        onViewChange={setActiveView}
+      />
 
-            <p className="introduction">
-              Create local Minecraft world projects backed by the Java
-              engine.
-            </p>
+      <section className="app-workspace">
+        <header className="app-workspace-header">
+          <div className="app-workspace-heading">
+            <p>{activeViewDetails.eyebrow}</p>
+            <h1>{activeViewDetails.title}</h1>
+            <span>{activeViewDetails.description}</span>
+          </div>
+
+          <div className="app-project-context">
+            <span>Active project</span>
+            <strong>{workspace.project.name}</strong>
+            <small>
+              {workspace.projectDirty
+                ? 'Unsaved changes'
+                : workspace.projectPath === null
+                  ? 'Not saved yet'
+                  : 'Saved locally'}
+            </small>
           </div>
         </header>
 
-        <ProjectWorkspace workspace={workspace} />
+        <div className={`app-view app-view--${activeView}`}>
+          {activeView === 'seed-finder' && (
+            <SeedFinderWorkspace
+              requirements={workspace.project.searchRequirements}
+              onRequirementsChange={
+                workspace.updateSearchRequirements
+              }
+              resultLimit={defaultResultLimit}
+              onResultLimitChange={setDefaultResultLimit}
+            />
+          )}
 
-        <dl className="component-list">
-          {components.map(({ name, technology }) => (
-            <div className="component" key={name}>
-              <dt>{name}</dt>
-              <dd>{technology}</dd>
+          {activeView === 'project' && (
+            <div className="app-view-stack">
+              <ProjectWorkspace workspace={workspace} />
             </div>
-          ))}
-        </dl>
+          )}
 
-        <SearchRequirementsPanel
-          requirements={workspace.project.searchRequirements}
-          onChange={workspace.updateSearchRequirements}
-        />
+          {activeView === 'world-editor' && (
+            <section
+              className="app-placeholder"
+              aria-labelledby="world-editor-placeholder-title"
+            >
+              <p className="section-label">Workspace reserved</p>
+              <h2 id="world-editor-placeholder-title">
+                World editing tools will live here
+              </h2>
+              <p>
+                The fixed application shell is ready for the future
+                editor without changing the existing seed-search flow.
+              </p>
+            </section>
+          )}
 
-        <SeedFinderPanel
-          requirements={workspace.project.searchRequirements}
-        />
-
-        <SystemStatus />
+          {activeView === 'settings' && (
+            <SettingsWorkspace
+              resultLimit={defaultResultLimit}
+              onResultLimitChange={setDefaultResultLimit}
+              projectName={workspace.project.name}
+              projectPath={workspace.projectPath}
+              projectDirty={workspace.projectDirty}
+            />
+          )}
+        </div>
       </section>
     </main>
   )

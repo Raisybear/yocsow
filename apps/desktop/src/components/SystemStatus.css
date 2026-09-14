@@ -17,7 +17,7 @@
   width: 0.65rem;
   height: 0.65rem;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: 0;
   background: #7f8b9d;
   box-shadow: 0 0 1rem rgb(127 139 157 / 45%);
 }
