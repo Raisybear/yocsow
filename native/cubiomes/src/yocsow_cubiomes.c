@@ -2,7 +2,9 @@
 
 #include "finders.h"
 
+#include <math.h>
 #include <stdint.h>
+#include <string.h>
 
 #define YOCSOW_MAX_BLOCK_COORDINATE 30000000
 
@@ -242,6 +244,321 @@ static void find_villages_with_generator(
   }
 }
 
+struct SeedAssignmentState {
+  int32_t requirement_count;
+  const int32_t *requirement_search_area_indexes;
+  const int32_t *candidate_counts;
+  const struct YocsowBlockPosition *candidate_positions;
+  int32_t *assignment_found;
+  struct YocsowBlockPosition *assignments;
+  int32_t visited_count;
+  struct YocsowBlockPosition *visited_positions;
+};
+
+static int positions_are_equal(
+    const struct YocsowBlockPosition *first,
+    const struct YocsowBlockPosition *second) {
+  return first->x == second->x &&
+         first->z == second->z;
+}
+
+static int position_was_visited(
+    struct SeedAssignmentState *state,
+    const struct YocsowBlockPosition *position) {
+  for (int32_t index = 0;
+       index < state->visited_count;
+       index++) {
+    if (positions_are_equal(
+            &state->visited_positions[index],
+            position)) {
+      return 1;
+    }
+  }
+
+  state->visited_positions[state->visited_count] =
+      *position;
+
+  state->visited_count++;
+  return 0;
+}
+
+static int32_t find_position_owner(
+    const struct SeedAssignmentState *state,
+    const struct YocsowBlockPosition *position) {
+  for (int32_t requirement_index = 0;
+       requirement_index < state->requirement_count;
+       requirement_index++) {
+    if (state->assignment_found[requirement_index] &&
+        positions_are_equal(
+            &state->assignments[requirement_index],
+            position)) {
+      return requirement_index;
+    }
+  }
+
+  return -1;
+}
+
+static int assign_requirement(
+    int32_t requirement_index,
+    struct SeedAssignmentState *state) {
+  int32_t search_area_index =
+      state->requirement_search_area_indexes
+          [requirement_index];
+
+  int32_t candidate_count =
+      state->candidate_counts[search_area_index];
+
+  const struct YocsowBlockPosition *candidates =
+      &state->candidate_positions
+          [search_area_index *
+           YOCSOW_MAX_VILLAGE_REQUIREMENTS];
+
+  for (int32_t candidate_index = 0;
+       candidate_index < candidate_count;
+       candidate_index++) {
+    const struct YocsowBlockPosition *candidate =
+        &candidates[candidate_index];
+
+    if (position_was_visited(state, candidate)) {
+      continue;
+    }
+
+    int32_t current_owner =
+        find_position_owner(state, candidate);
+
+    if (current_owner < 0 ||
+        assign_requirement(current_owner, state)) {
+      state->assignment_found[requirement_index] = 1;
+      state->assignments[requirement_index] =
+          *candidate;
+
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
+static void sort_requirement_indexes(
+    int32_t requirement_count,
+    const int32_t *requirement_search_area_indexes,
+    const int32_t *candidate_counts,
+    int32_t *requirement_indexes) {
+  for (int32_t index = 0;
+       index < requirement_count;
+       index++) {
+    requirement_indexes[index] = index;
+  }
+
+  for (int32_t index = 1;
+       index < requirement_count;
+       index++) {
+    int32_t requirement_index =
+        requirement_indexes[index];
+
+    int32_t search_area_index =
+        requirement_search_area_indexes
+            [requirement_index];
+
+    int32_t candidate_count =
+        candidate_counts[search_area_index];
+
+    int32_t insertion_index = index;
+
+    while (insertion_index > 0) {
+      int32_t previous_requirement_index =
+          requirement_indexes
+              [insertion_index - 1];
+
+      int32_t previous_search_area_index =
+          requirement_search_area_indexes
+              [previous_requirement_index];
+
+      int32_t previous_candidate_count =
+          candidate_counts
+              [previous_search_area_index];
+
+      if (previous_candidate_count <
+              candidate_count ||
+          (previous_candidate_count ==
+               candidate_count &&
+           previous_requirement_index <
+               requirement_index)) {
+        break;
+      }
+
+      requirement_indexes[insertion_index] =
+          previous_requirement_index;
+
+      insertion_index--;
+    }
+
+    requirement_indexes[insertion_index] =
+        requirement_index;
+  }
+}
+
+static double average_normalized_distance(
+    int32_t requirement_count,
+    const int32_t *requirement_search_area_indexes,
+    const struct YocsowVillageSearchArea *search_areas,
+    const int32_t *assignment_found,
+    const struct YocsowBlockPosition *assignments) {
+  double normalized_distance_sum = 0;
+  int32_t matched_requirement_count = 0;
+
+  for (int32_t requirement_index = 0;
+       requirement_index < requirement_count;
+       requirement_index++) {
+    if (!assignment_found[requirement_index]) {
+      continue;
+    }
+
+    int32_t search_area_index =
+        requirement_search_area_indexes
+            [requirement_index];
+
+    const struct YocsowVillageSearchArea *search_area =
+        &search_areas[search_area_index];
+
+    double delta_x =
+        (double)assignments[requirement_index].x -
+        search_area->center_x;
+
+    double delta_z =
+        (double)assignments[requirement_index].z -
+        search_area->center_z;
+
+    normalized_distance_sum +=
+        hypot(delta_x, delta_z) /
+        search_area->radius_blocks;
+
+    matched_requirement_count++;
+  }
+
+  return normalized_distance_sum /
+         matched_requirement_count;
+}
+
+static int seed_candidate_is_better(
+    int32_t matched_requirement_count,
+    double average_distance,
+    int64_t seed,
+    const struct YocsowSeedSearchCandidate *existing,
+    double existing_average_distance) {
+  if (matched_requirement_count !=
+      existing->matched_requirement_count) {
+    return matched_requirement_count >
+           existing->matched_requirement_count;
+  }
+
+  if (average_distance !=
+      existing_average_distance) {
+    return average_distance <
+           existing_average_distance;
+  }
+
+  return seed < existing->seed;
+}
+
+static void insert_seed_candidate(
+    int64_t seed,
+    int32_t requirement_count,
+    int32_t matched_requirement_count,
+    double average_distance,
+    const int32_t *assignment_found,
+    const struct YocsowBlockPosition *assignments,
+    int32_t result_capacity,
+    int32_t *candidate_count,
+    struct YocsowSeedSearchCandidate *candidates,
+    double *average_distances,
+    struct YocsowSeedSearchMatch *matches) {
+  int32_t insertion_index = 0;
+
+  while (insertion_index < *candidate_count &&
+         !seed_candidate_is_better(
+             matched_requirement_count,
+             average_distance,
+             seed,
+             &candidates[insertion_index],
+             average_distances[insertion_index])) {
+    insertion_index++;
+  }
+
+  if (insertion_index >= result_capacity) {
+    return;
+  }
+
+  int32_t new_count = *candidate_count;
+
+  if (new_count < result_capacity) {
+    new_count++;
+  }
+
+  int32_t shifted_candidate_count =
+      new_count - insertion_index - 1;
+
+  if (shifted_candidate_count > 0) {
+    memmove(
+        &candidates[insertion_index + 1],
+        &candidates[insertion_index],
+        (size_t)shifted_candidate_count *
+            sizeof(*candidates));
+
+    memmove(
+        &average_distances[insertion_index + 1],
+        &average_distances[insertion_index],
+        (size_t)shifted_candidate_count *
+            sizeof(*average_distances));
+
+    memmove(
+        &matches
+            [(insertion_index + 1) *
+             requirement_count],
+        &matches
+            [insertion_index *
+             requirement_count],
+        (size_t)shifted_candidate_count *
+            requirement_count *
+            sizeof(*matches));
+  }
+
+  candidates[insertion_index].seed = seed;
+
+  candidates[insertion_index]
+      .matched_requirement_count =
+      matched_requirement_count;
+
+  candidates[insertion_index].reserved = 0;
+
+  average_distances[insertion_index] =
+      average_distance;
+
+  struct YocsowSeedSearchMatch *candidate_matches =
+      &matches[insertion_index * requirement_count];
+
+  for (int32_t requirement_index = 0;
+       requirement_index < requirement_count;
+       requirement_index++) {
+    candidate_matches[requirement_index].found =
+        assignment_found[requirement_index];
+
+    if (assignment_found[requirement_index]) {
+      candidate_matches[requirement_index].x =
+          assignments[requirement_index].x;
+
+      candidate_matches[requirement_index].z =
+          assignments[requirement_index].z;
+    } else {
+      candidate_matches[requirement_index].x = 0;
+      candidate_matches[requirement_index].z = 0;
+    }
+  }
+
+  *candidate_count = new_count;
+}
+
 int32_t yocsow_find_nearest_village(
     int32_t minecraft_version,
     int64_t seed,
@@ -466,6 +783,223 @@ int32_t yocsow_find_villages_batch(
           &result_counts[result_count_index],
           &results[result_position_index]);
     }
+  }
+
+  return YOCSOW_CUBIOMES_OK;
+}
+
+int32_t yocsow_search_village_seeds(
+    int32_t minecraft_version,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowVillageSearchArea *search_areas,
+    int32_t search_area_count,
+    const int32_t *requirement_search_area_indexes,
+    int32_t requirement_count,
+    int32_t result_capacity,
+    int32_t candidate_capacity,
+    int32_t *candidate_count,
+    struct YocsowSeedSearchCandidate *candidates,
+    int64_t match_capacity,
+    struct YocsowSeedSearchMatch *matches) {
+  if (search_areas == NULL ||
+      requirement_search_area_indexes == NULL ||
+      candidate_count == NULL ||
+      candidates == NULL ||
+      matches == NULL ||
+      seed_count <= 0 ||
+      seed_count > YOCSOW_MAX_VILLAGE_BATCH_SEEDS ||
+      search_area_count <= 0 ||
+      search_area_count >
+          YOCSOW_MAX_VILLAGE_SEARCH_AREAS ||
+      requirement_count <= 0 ||
+      requirement_count >
+          YOCSOW_MAX_VILLAGE_REQUIREMENTS ||
+      result_capacity <= 0 ||
+      result_capacity >
+          YOCSOW_MAX_SEED_SEARCH_RESULTS ||
+      candidate_capacity < 0 ||
+      match_capacity < 0) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
+  if (first_seed >
+      INT64_MAX - (int64_t)(seed_count - 1)) {
+    return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+  }
+
+  int64_t required_match_capacity =
+      (int64_t)result_capacity *
+      requirement_count;
+
+  if (candidate_capacity < result_capacity ||
+      match_capacity < required_match_capacity) {
+    return YOCSOW_CUBIOMES_BUFFER_TOO_SMALL;
+  }
+
+  int mc = cubiomes_version(minecraft_version);
+
+  if (mc == MC_UNDEF) {
+    return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
+  }
+
+  for (int32_t search_area_index = 0;
+       search_area_index < search_area_count;
+       search_area_index++) {
+    const struct YocsowVillageSearchArea *search_area =
+        &search_areas[search_area_index];
+
+    if (search_area->radius_blocks <= 0) {
+      return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+    }
+
+    if (!search_area_is_valid(
+            search_area->center_x,
+            search_area->center_z,
+            search_area->radius_blocks)) {
+      return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+    }
+  }
+
+  for (int32_t requirement_index = 0;
+       requirement_index < requirement_count;
+       requirement_index++) {
+    int32_t search_area_index =
+        requirement_search_area_indexes
+            [requirement_index];
+
+    if (search_area_index < 0 ||
+        search_area_index >= search_area_count) {
+      return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+    }
+  }
+
+  StructureConfig structure_config;
+
+  if (!getStructureConfig(
+          Village,
+          mc,
+          &structure_config)) {
+    return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
+  }
+
+  *candidate_count = 0;
+
+  double average_distances
+      [YOCSOW_MAX_SEED_SEARCH_RESULTS];
+
+  Generator generator;
+  setupGenerator(&generator, mc, 0);
+
+  for (int32_t seed_index = 0;
+       seed_index < seed_count;
+       seed_index++) {
+    int64_t signed_seed =
+        first_seed + seed_index;
+
+    uint64_t seed = (uint64_t)signed_seed;
+
+    applySeed(
+        &generator,
+        DIM_OVERWORLD,
+        seed);
+
+    int32_t candidate_counts
+        [YOCSOW_MAX_VILLAGE_SEARCH_AREAS] = {0};
+
+    struct YocsowBlockPosition candidate_positions
+        [YOCSOW_MAX_VILLAGE_SEARCH_AREAS]
+        [YOCSOW_MAX_VILLAGE_REQUIREMENTS];
+
+    for (int32_t search_area_index = 0;
+         search_area_index < search_area_count;
+         search_area_index++) {
+      const struct YocsowVillageSearchArea *search_area =
+          &search_areas[search_area_index];
+
+      find_villages_with_generator(
+          mc,
+          seed,
+          &structure_config,
+          &generator,
+          search_area->center_x,
+          search_area->center_z,
+          search_area->radius_blocks,
+          requirement_count,
+          &candidate_counts[search_area_index],
+          candidate_positions[search_area_index]);
+    }
+
+    int32_t requirement_indexes
+        [YOCSOW_MAX_VILLAGE_REQUIREMENTS];
+
+    sort_requirement_indexes(
+        requirement_count,
+        requirement_search_area_indexes,
+        candidate_counts,
+        requirement_indexes);
+
+    int32_t assignment_found
+        [YOCSOW_MAX_VILLAGE_REQUIREMENTS] = {0};
+
+    struct YocsowBlockPosition assignments
+        [YOCSOW_MAX_VILLAGE_REQUIREMENTS];
+
+    struct YocsowBlockPosition visited_positions
+        [YOCSOW_MAX_VILLAGE_REQUIREMENTS *
+         YOCSOW_MAX_VILLAGE_REQUIREMENTS];
+
+    for (int32_t index = 0;
+         index < requirement_count;
+         index++) {
+      struct SeedAssignmentState assignment_state = {
+          requirement_count,
+          requirement_search_area_indexes,
+          candidate_counts,
+          &candidate_positions[0][0],
+          assignment_found,
+          assignments,
+          0,
+          visited_positions};
+
+      assign_requirement(
+          requirement_indexes[index],
+          &assignment_state);
+    }
+
+    int32_t matched_requirement_count = 0;
+
+    for (int32_t requirement_index = 0;
+         requirement_index < requirement_count;
+         requirement_index++) {
+      matched_requirement_count +=
+          assignment_found[requirement_index];
+    }
+
+    if (matched_requirement_count == 0) {
+      continue;
+    }
+
+    double average_distance =
+        average_normalized_distance(
+            requirement_count,
+            requirement_search_area_indexes,
+            search_areas,
+            assignment_found,
+            assignments);
+
+    insert_seed_candidate(
+        signed_seed,
+        requirement_count,
+        matched_requirement_count,
+        average_distance,
+        assignment_found,
+        assignments,
+        result_capacity,
+        candidate_count,
+        candidates,
+        average_distances,
+        matches);
   }
 
   return YOCSOW_CUBIOMES_OK;

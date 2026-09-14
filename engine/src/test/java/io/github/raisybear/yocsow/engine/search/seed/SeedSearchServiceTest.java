@@ -137,6 +137,29 @@ class SeedSearchServiceTest {
   }
 
   @Test
+  void evaluatesWorkerRangesThroughSeedSearchKernel() {
+    ForkJoinPool workerPool = new ForkJoinPool(1);
+    RecordingSeedSearchKernel locator = new RecordingSeedSearchKernel();
+
+    try {
+      SeedSearchResult result =
+          new SeedSearchService(new StructureLocatorRegistry(List.of(locator)), workerPool)
+              .search(
+                  new SeedSearchRequest(
+                      0, 8, MinecraftVersion.JAVA_1_21, List.of(requirement("village-1")), 5));
+
+      assertEquals(4, locator.kernelSearchCount());
+      assertEquals(2, locator.largestKernelSeedCount());
+      assertEquals(0, locator.fallbackSearchCount());
+      assertEquals(
+          List.of(0L, 2L, 4L, 6L),
+          result.candidates().stream().map(SeedSearchCandidate::seed).toList());
+    } finally {
+      workerPool.shutdownNow();
+    }
+  }
+
+  @Test
   void rejectsIncompleteLocatorBatchResults() {
     StructureLocator locator =
         new StructureLocator() {
@@ -463,6 +486,50 @@ class SeedSearchServiceTest {
       } finally {
         activeCalls.decrementAndGet();
       }
+    }
+  }
+
+  private static final class RecordingSeedSearchKernel
+      implements StructureLocator, SeedSearchKernel {
+
+    private final AtomicInteger kernelSearchCount = new AtomicInteger();
+    private final AtomicInteger largestKernelSeedCount = new AtomicInteger();
+    private final AtomicInteger fallbackSearchCount = new AtomicInteger();
+
+    int kernelSearchCount() {
+      return kernelSearchCount.get();
+    }
+
+    int largestKernelSeedCount() {
+      return largestKernelSeedCount.get();
+    }
+
+    int fallbackSearchCount() {
+      return fallbackSearchCount.get();
+    }
+
+    @Override
+    public StructureType structureType() {
+      return StructureType.VILLAGE;
+    }
+
+    @Override
+    public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+      fallbackSearchCount.incrementAndGet();
+      return Optional.empty();
+    }
+
+    @Override
+    public List<SeedSearchCandidate> searchSeeds(SeedSearchRequest request) {
+      kernelSearchCount.incrementAndGet();
+      largestKernelSeedCount.accumulateAndGet(request.seedCount(), Math::max);
+
+      StructureRequirement requirement = request.requirements().getFirst();
+      StructureMatch match = StructureMatch.from(requirement, requirement.center());
+
+      return List.of(
+          new SeedSearchCandidate(
+              request.firstSeed(), request.requirements().size(), List.of(match)));
     }
   }
 
