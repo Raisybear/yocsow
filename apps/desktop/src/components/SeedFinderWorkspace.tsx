@@ -8,11 +8,15 @@ interface SeedFinderWorkspaceProps {
   onRequirementsChange: (
     requirements: SearchRequirement[],
   ) => void
+  resultLimit: string
+  onResultLimitChange: (resultLimit: string) => void
 }
 
 export function SeedFinderWorkspace({
   requirements,
   onRequirementsChange,
+  resultLimit,
+  onResultLimitChange,
 }: SeedFinderWorkspaceProps) {
   return (
     <div className="seed-finder-workspace">
@@ -21,7 +25,11 @@ export function SeedFinderWorkspace({
         onChange={onRequirementsChange}
       />
 
-      <SeedFinderPanel requirements={requirements} />
+      <SeedFinderPanel
+        requirements={requirements}
+        resultLimit={resultLimit}
+        onResultLimitChange={onResultLimitChange}
+      />
     </div>
   )
 }

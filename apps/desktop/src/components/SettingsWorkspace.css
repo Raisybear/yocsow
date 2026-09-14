@@ -1,0 +1,241 @@
+.settings-workspace {
+  display: grid;
+  width: min(100%, 72rem);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid #303a49;
+  background: #111821;
+}
+
+.settings-navigation {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-right: 1px solid #303a49;
+  background: #0e141c;
+}
+
+.settings-navigation > header {
+  padding: 1rem;
+  border-bottom: 1px solid #303a49;
+}
+
+.settings-navigation h2,
+.settings-panel-heading h2 {
+  margin: 0;
+  color: #f4f7fb;
+}
+
+.settings-navigation h2 {
+  font-size: 1rem;
+}
+
+.settings-tabs {
+  display: grid;
+  min-height: 0;
+  align-content: start;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  overflow-y: auto;
+}
+
+.settings-tab {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.65rem;
+  border: 1px solid transparent;
+  color: #aeb8c7;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  border-color: #303a49;
+  color: #f4f7fb;
+  background: #151c26;
+}
+
+.settings-tab:focus-visible,
+.settings-panel:focus-visible {
+  outline: 2px solid #78dba9;
+  outline-offset: -2px;
+}
+
+.settings-tab--active {
+  border-color: #3a6853;
+  color: #f4f7fb;
+  background: rgb(34 86 60 / 28%);
+}
+
+.settings-tab strong {
+  font-size: 0.76rem;
+}
+
+.settings-tab span {
+  color: #7f8b9d;
+  font-size: 0.64rem;
+}
+
+.settings-panel {
+  min-width: 0;
+  min-height: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  overflow-y: auto;
+  outline: none;
+  scrollbar-color: #526176 #111821;
+  scrollbar-width: thin;
+}
+
+.settings-panel-heading {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #303a49;
+}
+
+.settings-panel-heading h2 {
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  letter-spacing: -0.03em;
+}
+
+.settings-panel-heading > span {
+  display: block;
+  max-width: 40rem;
+  margin-top: 0.45rem;
+  color: #8f9aac;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.settings-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.settings-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #303a49;
+  background: #151c26;
+}
+
+.settings-card h3 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: 0.86rem;
+}
+
+.settings-card dl {
+  display: grid;
+  gap: 0;
+  margin: 0.8rem 0 0;
+}
+
+.settings-card dl > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(7rem, 0.7fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid #293342;
+}
+
+.settings-card dt {
+  color: #7f8b9d;
+  font-size: 0.68rem;
+}
+
+.settings-card dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #dce2eb;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.settings-card--form {
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+}
+
+.settings-field {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.settings-field > span {
+  color: #aeb8c7;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.settings-field input {
+  width: 100%;
+  min-height: 2.4rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #303a49;
+  outline: none;
+  color: #e7ebf1;
+  background: #0b1017;
+  font-size: 0.76rem;
+}
+
+.settings-field input:focus {
+  border-color: #54d692;
+  box-shadow: 0 0 0 2px rgb(84 214 146 / 14%);
+}
+
+.settings-field small {
+  color: #657184;
+  font-size: 0.64rem;
+}
+
+.settings-engine-status {
+  margin-top: 1rem;
+}
+
+.settings-engine-status .status-list {
+  margin: 0.8rem 0 0;
+}
+
+.settings-engine-status .status {
+  padding: 0.65rem;
+  border: 1px solid #293342;
+  background: #0e141c;
+  font-size: 0.72rem;
+}
+
+.settings-engine-status .status-indicator {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.settings-note {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border-left: 3px solid #64a8ff;
+  color: #8f9aac;
+  background: rgb(36 73 120 / 18%);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 64rem) {
+  .settings-workspace {
+    grid-template-columns: 11rem minmax(0, 1fr);
+  }
+
+  .settings-card-grid {
+    grid-template-columns: 1fr;
+  }
+}

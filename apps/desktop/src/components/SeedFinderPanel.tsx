@@ -32,6 +32,8 @@ interface SearchSession {
 
 interface SeedFinderPanelProps {
   requirements: SearchRequirement[]
+  resultLimit?: string
+  onResultLimitChange?: (resultLimit: string) => void
 }
 
 const idleState: SeedFinderState = {
@@ -80,14 +82,26 @@ function parseResultLimit(value: string): number {
 
 export function SeedFinderPanel({
   requirements,
+  resultLimit: controlledResultLimit,
+  onResultLimitChange,
 }: SeedFinderPanelProps) {
-  const [resultLimit, setResultLimit] = useState('20')
+  const [localResultLimit, setLocalResultLimit] = useState('20')
   const [requestState, setRequestState] =
     useState<SeedFinderRequestState>({
       fingerprint: '',
       state: idleState,
     })
   const activeSession = useRef<SearchSession | null>(null)
+  const resultLimit = controlledResultLimit ?? localResultLimit
+
+  function updateResultLimit(nextResultLimit: string): void {
+    if (onResultLimitChange === undefined) {
+      setLocalResultLimit(nextResultLimit)
+      return
+    }
+
+    onResultLimitChange(nextResultLimit)
+  }
 
   const fingerprint = requestFingerprint(
     requirements,
@@ -286,7 +300,7 @@ export function SeedFinderPanel({
             disabled={searchState.status === 'searching'}
             value={resultLimit}
             onChange={(event) => {
-              setResultLimit(event.currentTarget.value)
+              updateResultLimit(event.currentTarget.value)
             }}
           />
         </label>

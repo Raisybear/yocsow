@@ -5,6 +5,7 @@ import {
 } from './components/AppSidebar'
 import { ProjectWorkspace } from './components/ProjectWorkspace'
 import { SeedFinderWorkspace } from './components/SeedFinderWorkspace'
+import { SettingsWorkspace } from './components/SettingsWorkspace'
 import { useProjectWorkspace } from './hooks/useProjectWorkspace'
 import './App.css'
 
@@ -42,6 +43,8 @@ function App() {
   const workspace = useProjectWorkspace()
   const [activeView, setActiveView] =
     useState<WorkspaceView>('seed-finder')
+  const [defaultResultLimit, setDefaultResultLimit] =
+    useState('20')
   const activeViewDetails = viewDetails[activeView]
 
   return (
@@ -79,6 +82,8 @@ function App() {
               onRequirementsChange={
                 workspace.updateSearchRequirements
               }
+              resultLimit={defaultResultLimit}
+              onResultLimitChange={setDefaultResultLimit}
             />
           )}
 
@@ -105,21 +110,13 @@ function App() {
           )}
 
           {activeView === 'settings' && (
-            <section
-              className="app-placeholder"
-              aria-labelledby="settings-placeholder-title"
-            >
-              <p className="section-label">
-                Configuration workspace
-              </p>
-              <h2 id="settings-placeholder-title">
-                Settings are being reorganized
-              </h2>
-              <p>
-                General, search, engine and storage settings will be
-                separated into focused tabs in the final UI commit.
-              </p>
-            </section>
+            <SettingsWorkspace
+              resultLimit={defaultResultLimit}
+              onResultLimitChange={setDefaultResultLimit}
+              projectName={workspace.project.name}
+              projectPath={workspace.projectPath}
+              projectDirty={workspace.projectDirty}
+            />
           )}
         </div>
       </section>

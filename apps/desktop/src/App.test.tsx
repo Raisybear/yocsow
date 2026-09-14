@@ -66,7 +66,7 @@ describe('App', () => {
     ).toHaveAttribute('aria-current', 'page')
   })
 
-  it('provides reserved views for future editor and settings work', async () => {
+  it('provides the editor placeholder and settings workspace', async () => {
     const user = userEvent.setup()
 
     render(<App />)
@@ -85,8 +85,31 @@ describe('App', () => {
     )
     expect(
       screen.getByRole('heading', {
-        name: 'Settings are being reorganized',
+        name: 'General',
       }),
     ).toBeInTheDocument()
+  })
+
+  it('keeps search preferences when navigating between views', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: /Settings/i }),
+    )
+    await user.click(screen.getByRole('tab', { name: /Search/i }))
+
+    const defaultResultLimit = screen.getByLabelText(
+      'Default result limit',
+    )
+    await user.clear(defaultResultLimit)
+    await user.type(defaultResultLimit, '35')
+
+    await user.click(
+      screen.getByRole('button', { name: /Seed Finder/i }),
+    )
+
+    expect(screen.getByLabelText('Result limit')).toHaveValue('35')
   })
 })

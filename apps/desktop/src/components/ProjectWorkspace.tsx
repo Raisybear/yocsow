@@ -72,47 +72,61 @@ export function ProjectWorkspace({
         </div>
       </div>
 
-      <label className="project-name-field">
-        <span>Project name</span>
-        <input
-          name="projectName"
-          type="text"
-          autoComplete="off"
-          maxLength={120}
-          required
-          value={project.name}
-          onChange={(event) => {
-            workspace.updateProjectName(event.currentTarget.value)
-          }}
-        />
-      </label>
+      <div className="project-workspace-body">
+        <div className="project-details">
+          <label className="project-name-field">
+            <span>Project name</span>
+            <input
+              name="projectName"
+              type="text"
+              autoComplete="off"
+              maxLength={120}
+              required
+              value={project.name}
+              onChange={(event) => {
+                workspace.updateProjectName(event.currentTarget.value)
+              }}
+            />
+          </label>
 
-      <div className="project-file-summary">
-        <div>
-          <span className="project-file-label">File</span>
-          <span
-            className="project-file-name"
-            title={projectPath ?? undefined}
-          >
-            {projectPath === null
-              ? 'Not saved yet'
-              : projectFilename(projectPath)}
-          </span>
+          <div className="project-file-summary">
+            <div>
+              <span className="project-file-label">File</span>
+              <span
+                className="project-file-name"
+                title={projectPath ?? undefined}
+              >
+                {projectPath === null
+                  ? 'Not saved yet'
+                  : projectFilename(projectPath)}
+              </span>
+            </div>
+
+            <span
+              className={
+                projectDirty
+                  ? 'project-change-state project-change-state--dirty'
+                  : 'project-change-state'
+              }
+            >
+              {projectDirty
+                ? 'Unsaved changes'
+                : projectPath === null
+                  ? 'New project'
+                  : 'All changes saved'}
+            </span>
+          </div>
         </div>
 
-        <span
-          className={
-            projectDirty
-              ? 'project-change-state project-change-state--dirty'
-              : 'project-change-state'
-          }
-        >
-          {projectDirty
-            ? 'Unsaved changes'
-            : projectPath === null
-              ? 'New project'
-              : 'All changes saved'}
-        </span>
+        <aside className="project-workflow" aria-label="Project workflow">
+          <span>Local workflow</span>
+          <h3>Project files stay under your control</h3>
+          <ul>
+            <li>Create a clean project or open an existing file.</li>
+            <li>Search filters are stored with the project.</li>
+            <li>Saving always uses an explicit local destination.</li>
+          </ul>
+        </aside>
       </div>
 
       <div

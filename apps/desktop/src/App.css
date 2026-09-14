@@ -104,7 +104,8 @@
   scrollbar-width: thin;
 }
 
-.app-view--seed-finder {
+.app-view--seed-finder,
+.app-view--settings {
   overflow: hidden;
 }
 
