@@ -117,6 +117,53 @@ class SeedSearchServiceTest {
   }
 
   @Test
+  void resolvesSharedSearchMetadataBeforeEvaluatingSeeds() {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+
+    serviceUsing(locator)
+        .search(
+            new SeedSearchRequest(
+                0,
+                8,
+                MinecraftVersion.JAVA_1_21,
+                List.of(requirement("village-1"), requirement("village-2")),
+                5));
+
+    assertEquals(1, locator.structureTypeQueryCount());
+    assertEquals(8, locator.candidateSearchCount());
+  }
+
+  @Test
+  void mapsRequirementsToTheirPrecomputedSearchAreas() {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+    BlockPosition spawn = new BlockPosition(0, 0);
+    BlockPosition remoteCenter = new BlockPosition(9_000, 0);
+
+    locator.locate(42, spawn, new BlockPosition(100, 0));
+    locator.locate(42, remoteCenter, new BlockPosition(9_100, 0));
+
+    SeedSearchResult result =
+        serviceUsing(locator)
+            .search(
+                new SeedSearchRequest(
+                    42,
+                    1,
+                    MinecraftVersion.JAVA_1_21,
+                    List.of(
+                        requirement("spawn-village", spawn),
+                        requirement("remote-village", remoteCenter)),
+                    1));
+
+    SeedSearchCandidate candidate = result.candidates().getFirst();
+
+    assertEquals(2, locator.candidateSearchCount());
+    assertEquals(
+        List.of("spawn-village", "remote-village"),
+        candidate.matches().stream().map(StructureMatch::requirementId).toList());
+    assertTrue(candidate.matchesAllRequirements());
+  }
+
+  @Test
   void assignsDistinctVillagesToRequirementsWithTheSameSearchArea() {
     RecordingVillageLocator locator = new RecordingVillageLocator();
     List<BlockPosition> villages =
@@ -221,18 +268,26 @@ class SeedSearchServiceTest {
   }
 
   private StructureRequirement requirement(String id) {
-    return new StructureRequirement(id, StructureType.VILLAGE, new BlockPosition(0, 0), 1_000);
+    return requirement(id, new BlockPosition(0, 0));
+  }
+
+  private StructureRequirement requirement(String id, BlockPosition center) {
+    return new StructureRequirement(id, StructureType.VILLAGE, center, 1_000);
   }
 
   private static final class RecordingVillageLocator implements StructureLocator {
 
     private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
     private final AtomicInteger candidateSearchCount = new AtomicInteger();
+    private final AtomicInteger structureTypeQueryCount = new AtomicInteger();
 
     void locate(long seed, BlockPosition position) {
+      locate(seed, new BlockPosition(0, 0), position);
+    }
+
+    void locate(long seed, BlockPosition center, BlockPosition position) {
       positions
-          .computeIfAbsent(
-              new SearchKey(seed, new BlockPosition(0, 0), 1_000), ignored -> new ArrayList<>())
+          .computeIfAbsent(new SearchKey(seed, center, 1_000), ignored -> new ArrayList<>())
           .add(position);
     }
 
@@ -240,8 +295,13 @@ class SeedSearchServiceTest {
       return candidateSearchCount.get();
     }
 
+    int structureTypeQueryCount() {
+      return structureTypeQueryCount.get();
+    }
+
     @Override
     public StructureType structureType() {
+      structureTypeQueryCount.incrementAndGet();
       return StructureType.VILLAGE;
     }
 
