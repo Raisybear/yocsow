@@ -378,6 +378,350 @@ static void rejects_invalid_batch_arguments(void) {
       status);
 }
 
+struct ExpectedSeedCandidate {
+  int64_t seed;
+  int64_t distance_squared;
+  struct YocsowBlockPosition position;
+};
+
+static int expected_seed_candidate_is_better(
+    const struct ExpectedSeedCandidate *candidate,
+    const struct ExpectedSeedCandidate *existing) {
+  if (candidate->distance_squared !=
+      existing->distance_squared) {
+    return candidate->distance_squared <
+           existing->distance_squared;
+  }
+
+  return candidate->seed < existing->seed;
+}
+
+static void insert_expected_seed_candidate(
+    const struct ExpectedSeedCandidate *candidate,
+    int32_t capacity,
+    int32_t *count,
+    struct ExpectedSeedCandidate *candidates) {
+  int32_t insertion_index = 0;
+
+  while (insertion_index < *count &&
+         !expected_seed_candidate_is_better(
+             candidate,
+             &candidates[insertion_index])) {
+    insertion_index++;
+  }
+
+  if (insertion_index >= capacity) {
+    return;
+  }
+
+  int32_t new_count = *count;
+
+  if (new_count < capacity) {
+    new_count++;
+  }
+
+  for (int32_t index = new_count - 1;
+       index > insertion_index;
+       index--) {
+    candidates[index] = candidates[index - 1];
+  }
+
+  candidates[insertion_index] = *candidate;
+  *count = new_count;
+}
+
+static void seed_search_matches_scalar_results(void) {
+  const int64_t first_seed = -32;
+  const int32_t seed_count = 64;
+  const int32_t result_capacity = 5;
+
+  const struct YocsowVillageSearchArea search_area = {
+      0,
+      0,
+      1000};
+
+  const int32_t requirement_search_area_index = 0;
+
+  int32_t expected_count = 0;
+
+  struct ExpectedSeedCandidate
+      expected_candidates[5];
+
+  for (int32_t seed_index = 0;
+       seed_index < seed_count;
+       seed_index++) {
+    int32_t village_count = 0;
+    struct YocsowBlockPosition village;
+
+    int32_t status =
+        yocsow_find_villages(
+            YOCSOW_MC_JAVA_1_21,
+            first_seed + seed_index,
+            search_area.center_x,
+            search_area.center_z,
+            search_area.radius_blocks,
+            1,
+            &village_count,
+            &village);
+
+    expect_equal(
+        "scalar seed search status",
+        YOCSOW_CUBIOMES_OK,
+        status);
+
+    if (village_count == 0) {
+      continue;
+    }
+
+    struct ExpectedSeedCandidate candidate = {
+        first_seed + seed_index,
+        (int64_t)village.x * village.x +
+            (int64_t)village.z * village.z,
+        village};
+
+    insert_expected_seed_candidate(
+        &candidate,
+        result_capacity,
+        &expected_count,
+        expected_candidates);
+  }
+
+  int32_t candidate_count = 0;
+
+  struct YocsowSeedSearchCandidate candidates[5];
+  struct YocsowSeedSearchMatch matches[5];
+
+  int32_t status =
+      yocsow_search_village_seeds(
+          YOCSOW_MC_JAVA_1_21,
+          first_seed,
+          seed_count,
+          &search_area,
+          1,
+          &requirement_search_area_index,
+          1,
+          result_capacity,
+          5,
+          &candidate_count,
+          candidates,
+          5,
+          matches);
+
+  expect_equal(
+      "native seed search status",
+      YOCSOW_CUBIOMES_OK,
+      status);
+
+  expect_equal(
+      "native seed search candidate count",
+      expected_count,
+      candidate_count);
+
+  for (int32_t index = 0;
+       index < expected_count;
+       index++) {
+    expect_equal(
+        "native seed search seed",
+        expected_candidates[index].seed,
+        candidates[index].seed);
+
+    expect_equal(
+        "native seed search match count",
+        1,
+        candidates[index]
+            .matched_requirement_count);
+
+    expect_equal(
+        "native seed search match found",
+        1,
+        matches[index].found);
+
+    expect_equal(
+        "native seed search match x",
+        expected_candidates[index].position.x,
+        matches[index].x);
+
+    expect_equal(
+        "native seed search match z",
+        expected_candidates[index].position.z,
+        matches[index].z);
+  }
+}
+
+static void seed_search_assigns_distinct_villages(void) {
+  const struct YocsowVillageSearchArea search_area = {
+      0,
+      0,
+      5000};
+
+  const int32_t requirement_search_area_indexes[2] = {
+      0,
+      0};
+
+  int32_t expected_count = 0;
+  struct YocsowBlockPosition expected_villages[2];
+
+  int32_t status =
+      yocsow_find_villages(
+          YOCSOW_MC_JAVA_1_21,
+          42,
+          search_area.center_x,
+          search_area.center_z,
+          search_area.radius_blocks,
+          2,
+          &expected_count,
+          expected_villages);
+
+  expect_equal(
+      "distinct village reference status",
+      YOCSOW_CUBIOMES_OK,
+      status);
+
+  expect_equal(
+      "distinct village reference count",
+      2,
+      expected_count);
+
+  int32_t candidate_count = 0;
+  struct YocsowSeedSearchCandidate candidate;
+  struct YocsowSeedSearchMatch matches[2];
+
+  status =
+      yocsow_search_village_seeds(
+          YOCSOW_MC_JAVA_1_21,
+          42,
+          1,
+          &search_area,
+          1,
+          requirement_search_area_indexes,
+          2,
+          1,
+          1,
+          &candidate_count,
+          &candidate,
+          2,
+          matches);
+
+  expect_equal(
+      "distinct village seed search status",
+      YOCSOW_CUBIOMES_OK,
+      status);
+
+  expect_equal(
+      "distinct village candidate count",
+      1,
+      candidate_count);
+
+  expect_equal(
+      "distinct village match count",
+      2,
+      candidate.matched_requirement_count);
+
+  expect_true(
+      "seed search village assignments differ",
+      matches[0].x != matches[1].x ||
+          matches[0].z != matches[1].z);
+
+  expect_equal(
+      "reassigned first village x",
+      expected_villages[1].x,
+      matches[0].x);
+
+  expect_equal(
+      "reassigned first village z",
+      expected_villages[1].z,
+      matches[0].z);
+
+  expect_equal(
+      "assigned second village x",
+      expected_villages[0].x,
+      matches[1].x);
+
+  expect_equal(
+      "assigned second village z",
+      expected_villages[0].z,
+      matches[1].z);
+}
+
+static void rejects_invalid_seed_search_buffers(void) {
+  const struct YocsowVillageSearchArea search_area = {
+      0,
+      0,
+      1000};
+
+  const int32_t requirement_search_area_indexes[2] = {
+      0,
+      0};
+
+  int32_t candidate_count = 123;
+
+  struct YocsowSeedSearchCandidate candidate = {
+      456,
+      789,
+      0};
+
+  struct YocsowSeedSearchMatch matches[2] = {
+      {1, 234, 567},
+      {1, 345, 678}};
+
+  int32_t status =
+      yocsow_search_village_seeds(
+          YOCSOW_MC_JAVA_1_21,
+          42,
+          1,
+          &search_area,
+          1,
+          requirement_search_area_indexes,
+          2,
+          1,
+          0,
+          &candidate_count,
+          &candidate,
+          2,
+          matches);
+
+  expect_equal(
+      "small candidate buffer status",
+      YOCSOW_CUBIOMES_BUFFER_TOO_SMALL,
+      status);
+
+  expect_equal(
+      "small candidate buffer leaves count unchanged",
+      123,
+      candidate_count);
+
+  status =
+      yocsow_search_village_seeds(
+          YOCSOW_MC_JAVA_1_21,
+          42,
+          1,
+          &search_area,
+          1,
+          requirement_search_area_indexes,
+          2,
+          1,
+          1,
+          &candidate_count,
+          &candidate,
+          1,
+          matches);
+
+  expect_equal(
+      "small match buffer status",
+      YOCSOW_CUBIOMES_BUFFER_TOO_SMALL,
+      status);
+
+  expect_equal(
+      "small match buffer leaves candidate unchanged",
+      456,
+      candidate.seed);
+
+  expect_equal(
+      "small match buffer leaves match unchanged",
+      234,
+      matches[0].x);
+}
+
 static void rejects_unsupported_versions(void) {
   struct YocsowVillageResult result;
 
@@ -440,6 +784,9 @@ int main(void) {
   batch_matches_individual_searches();
   rejects_small_batch_buffers_without_writing();
   rejects_invalid_batch_arguments();
+  seed_search_matches_scalar_results();
+  seed_search_assigns_distinct_villages();
+  rejects_invalid_seed_search_buffers();
   rejects_unsupported_versions();
   rejects_invalid_radii();
   rejects_searches_outside_world_border();

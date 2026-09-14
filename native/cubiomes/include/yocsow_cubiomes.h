@@ -36,7 +36,9 @@ enum YocsowResultLimits {
 
 enum YocsowBatchLimits {
   YOCSOW_MAX_VILLAGE_BATCH_SEEDS = 10000,
-  YOCSOW_MAX_VILLAGE_SEARCH_AREAS = 32
+  YOCSOW_MAX_VILLAGE_SEARCH_AREAS = 32,
+  YOCSOW_MAX_VILLAGE_REQUIREMENTS = 32,
+  YOCSOW_MAX_SEED_SEARCH_RESULTS = 100
 };
 
 struct YocsowBlockPosition {
@@ -54,6 +56,18 @@ struct YocsowVillageSearchArea {
   int64_t center_x;
   int64_t center_z;
   int64_t radius_blocks;
+};
+
+struct YocsowSeedSearchCandidate {
+  int64_t seed;
+  int32_t matched_requirement_count;
+  int32_t reserved;
+};
+
+struct YocsowSeedSearchMatch {
+  int32_t found;
+  int32_t x;
+  int32_t z;
 };
 
 YOCSOW_CUBIOMES_API int32_t
@@ -94,6 +108,29 @@ yocsow_find_villages_batch(
     int32_t *result_counts,
     int64_t result_position_capacity,
     struct YocsowBlockPosition *results);
+
+/*
+ * Evaluates consecutive seeds entirely inside the native Cubiomes boundary.
+ * Requirements refer to search areas by zero-based index. Candidates are
+ * returned in best-first order: match count, average normalized distance,
+ * then signed seed. Matches use [candidate][requirement] order.
+ * Buffer capacities are measured in elements, not bytes.
+ */
+YOCSOW_CUBIOMES_API int32_t
+yocsow_search_village_seeds(
+    int32_t minecraft_version,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowVillageSearchArea *search_areas,
+    int32_t search_area_count,
+    const int32_t *requirement_search_area_indexes,
+    int32_t requirement_count,
+    int32_t result_capacity,
+    int32_t candidate_capacity,
+    int32_t *candidate_count,
+    struct YocsowSeedSearchCandidate *candidates,
+    int64_t match_capacity,
+    struct YocsowSeedSearchMatch *matches);
 
 #ifdef __cplusplus
 }
