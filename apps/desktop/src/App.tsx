@@ -4,8 +4,7 @@ import {
   type WorkspaceView,
 } from './components/AppSidebar'
 import { ProjectWorkspace } from './components/ProjectWorkspace'
-import { SearchRequirementsPanel } from './components/SearchRequirementsPanel'
-import { SeedFinderPanel } from './components/SeedFinderPanel'
+import { SeedFinderWorkspace } from './components/SeedFinderWorkspace'
 import { useProjectWorkspace } from './hooks/useProjectWorkspace'
 import './App.css'
 
@@ -75,16 +74,12 @@ function App() {
 
         <div className={`app-view app-view--${activeView}`}>
           {activeView === 'seed-finder' && (
-            <div className="app-view-stack">
-              <SearchRequirementsPanel
-                requirements={workspace.project.searchRequirements}
-                onChange={workspace.updateSearchRequirements}
-              />
-
-              <SeedFinderPanel
-                requirements={workspace.project.searchRequirements}
-              />
-            </div>
+            <SeedFinderWorkspace
+              requirements={workspace.project.searchRequirements}
+              onRequirementsChange={
+                workspace.updateSearchRequirements
+              }
+            />
           )}
 
           {activeView === 'project' && (

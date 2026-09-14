@@ -36,7 +36,7 @@ describe('App', () => {
       screen.getByRole('heading', { name: 'Seed finder' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: 'Search requirements' }),
+      screen.getByRole('heading', { name: 'Seed filters' }),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /Seed Finder/i }),
@@ -59,7 +59,7 @@ describe('App', () => {
       screen.getByRole('heading', { name: 'Project workspace' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('heading', { name: 'Search requirements' }),
+      screen.queryByRole('heading', { name: 'Seed filters' }),
     ).not.toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: /Project/i }),

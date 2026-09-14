@@ -188,7 +188,7 @@ describe('ProjectWorkspace', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Add requirement',
+        name: 'Add Village filter',
       }),
     )
 

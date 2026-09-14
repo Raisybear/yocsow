@@ -104,6 +104,10 @@
   scrollbar-width: thin;
 }
 
+.app-view--seed-finder {
+  overflow: hidden;
+}
+
 .app-view-stack {
   width: min(100%, 78rem);
   margin: 0 auto;

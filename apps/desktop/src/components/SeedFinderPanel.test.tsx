@@ -319,7 +319,7 @@ describe('SeedFinderPanel', () => {
 
     expect(
       screen
-        .getAllByRole('heading', { level: 3 })
+        .getAllByRole('heading', { level: 4 })
         .map((heading) => heading.textContent),
     ).toEqual(['Seed 2', 'Seed 1'])
   })

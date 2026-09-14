@@ -1,0 +1,247 @@
+.seed-search-output {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.seed-finder-status {
+  min-height: 2rem;
+  padding: 0.45rem 0.8rem;
+  border-bottom: 1px solid #293342;
+  color: #aeb8c7;
+  background: #151c26;
+  font-size: 0.68rem;
+}
+
+.seed-finder-status p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.seed-finder-status--searching {
+  border-left: 3px solid #64a8ff;
+  color: #a9cdff;
+}
+
+.seed-finder-status--result {
+  border-left: 3px solid #54d692;
+  color: #8ce5b8;
+}
+
+.seed-finder-status--error {
+  border-left: 3px solid #ff6b6b;
+  color: #ff9191;
+}
+
+.seed-finder-status--browser {
+  border-left: 3px solid #64a8ff;
+  color: #8fbdff;
+}
+
+.seed-results-panel {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.seed-results-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0.8rem;
+  border-bottom: 1px solid #293342;
+  background: #0e141c;
+}
+
+.seed-results-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.seed-results-heading span {
+  color: #657184;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.seed-results-heading h3 {
+  margin: 0;
+  color: #f4f7fb;
+  font-size: 0.86rem;
+}
+
+.seed-results-heading > strong {
+  color: #78dba9;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.seed-results-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: #526176 #0e141c;
+  scrollbar-width: thin;
+}
+
+.seed-results-empty,
+.seed-finder-empty {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  margin: 0;
+  padding: 1.5rem;
+  color: #7f8b9d;
+  text-align: center;
+}
+
+.seed-results-empty strong {
+  color: #dce2eb;
+  font-size: 0.84rem;
+}
+
+.seed-results-empty p {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+}
+
+.seed-finder-empty {
+  color: #aeb8c7;
+  font-size: 0.76rem;
+}
+
+.seed-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.65rem;
+  list-style: none;
+}
+
+.seed-result-card {
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid #303a49;
+  background: #151c26;
+}
+
+.seed-result-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.seed-result-heading > div {
+  min-width: 0;
+}
+
+.seed-result-rank {
+  color: #78dba9;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.seed-result-heading h4 {
+  margin: 0.15rem 0 0;
+  overflow-wrap: anywhere;
+  color: #f4f7fb;
+  font-size: 0.9rem;
+}
+
+.seed-result-badge {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #526176;
+  color: #aeb8c7;
+  background: #0e141c;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.seed-result-badge--complete {
+  border-color: rgb(84 214 146 / 55%);
+  color: #8ce5b8;
+  background: rgb(34 86 60 / 22%);
+}
+
+.seed-result-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  margin: 0.55rem 0 0;
+}
+
+.seed-result-metrics > div {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #293342;
+  background: #0e141c;
+}
+
+.seed-result-metrics dt {
+  color: #657184;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+
+.seed-result-metrics dd {
+  margin: 0.15rem 0 0;
+  color: #dce2eb;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.structure-matches {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.structure-matches > li {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.5rem;
+  border-left: 2px solid #54d692;
+  background: #0e141c;
+}
+
+.structure-matches > li > div {
+  display: grid;
+  min-width: 0;
+}
+
+.structure-matches strong {
+  color: #dce2eb;
+  font-size: 0.68rem;
+}
+
+.structure-matches span,
+.structure-matches p {
+  margin: 0;
+  overflow: hidden;
+  color: #7f8b9d;
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 64rem) {
+  .seed-results {
+    grid-template-columns: 1fr;
+  }
+}

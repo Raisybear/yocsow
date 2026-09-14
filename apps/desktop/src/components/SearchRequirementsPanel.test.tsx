@@ -35,7 +35,7 @@ describe('SearchRequirementsPanel', () => {
     render(<SearchRequirementsHarness />)
 
     expect(
-      screen.getByText('No search requirements added yet.'),
+      screen.getByText('No filters added yet'),
     ).toBeInTheDocument()
 
     expect(renderedRequirements()).toEqual([])
@@ -46,15 +46,9 @@ describe('SearchRequirementsPanel', () => {
 
     render(<SearchRequirementsHarness />)
 
-    expect(
-      screen.getByRole('combobox', {
-        name: 'Requirement type',
-      }),
-    ).toHaveValue('village')
-
     await user.click(
       screen.getByRole('button', {
-        name: 'Add requirement',
+        name: 'Add Village filter',
       }),
     )
 
@@ -94,7 +88,7 @@ describe('SearchRequirementsPanel', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Add requirement',
+        name: 'Add Village filter',
       }),
     )
 
@@ -129,20 +123,43 @@ describe('SearchRequirementsPanel', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Add requirement',
+        name: 'Add Village filter',
       }),
     )
 
     await user.click(
       screen.getByRole('button', {
-        name: 'Remove',
+        name: 'Remove Village requirement 1',
       }),
     )
 
     expect(renderedRequirements()).toEqual([])
 
     expect(
-      screen.getByText('No search requirements added yet.'),
+      screen.getByText('No filters added yet'),
     ).toBeInTheDocument()
+  })
+
+  it('switches between independently searchable filter catalogs', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+
+    expect(
+      screen.getByRole('tab', { name: 'Structures' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    expect(
+      screen.getByRole('button', { name: 'Add Village filter' }),
+    ).toBeEnabled()
+
+    await user.click(screen.getByRole('tab', { name: 'Biomes' }))
+
+    expect(
+      screen.getByRole('tab', { name: 'Biomes' }),
+    ).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByLabelText('Search biomes')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Taiga unavailable' }),
+    ).toBeDisabled()
   })
 })

@@ -1,0 +1,20 @@
+.seed-finder-workspace {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows:
+    minmax(17rem, 0.95fr)
+    minmax(16rem, 1.05fr);
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+@media (max-height: 44rem) {
+  .seed-finder-workspace {
+    grid-template-rows:
+      minmax(14rem, 0.9fr)
+      minmax(14rem, 1.1fr);
+  }
+}
