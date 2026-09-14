@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { getAppInfo } from './native/app-info'
@@ -24,35 +25,68 @@ describe('App', () => {
     getEngineStatusMock.mockReturnValue(new Promise(() => {}))
   })
 
-  it('renders the application identity', () => {
+  it('renders the fixed workspace shell with the seed finder active', () => {
     render(<App />)
-
-    expect(
-      screen.getByRole('heading', {
-        name: 'Your world. Your rules.',
-      }),
-    ).toBeInTheDocument()
 
     expect(screen.getByText('YOCSOW')).toBeInTheDocument()
+    expect(
+      screen.getByRole('navigation', { name: 'Workspace' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Seed finder' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Search requirements' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Seed Finder/i }),
+    ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('switches between workspace views without duplicating panels', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: /Project/i }),
+    )
 
     expect(
+      screen.getByRole('heading', { name: 'Project management' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Project workspace' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Search requirements' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Project/i }),
+    ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('provides reserved views for future editor and settings work', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: /World Editor/i }),
+    )
+    expect(
       screen.getByRole('heading', {
-        name: 'Search requirements',
+        name: 'World editing tools will live here',
       }),
     ).toBeInTheDocument()
 
+    await user.click(
+      screen.getByRole('button', { name: /Settings/i }),
+    )
     expect(
-      screen.queryByRole('heading', {
-        name: 'Check a seed range',
+      screen.getByRole('heading', {
+        name: 'Settings are being reorganized',
       }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('shows the configured technology foundation', () => {
-    render(<App />)
-
-    expect(screen.getByText('React 19')).toBeInTheDocument()
-    expect(screen.getByText('Vite 8')).toBeInTheDocument()
-    expect(screen.getByText('Java 21')).toBeInTheDocument()
+    ).toBeInTheDocument()
   })
 })
