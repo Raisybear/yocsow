@@ -103,7 +103,8 @@
 }
 
 .filter-catalog-search span,
-.search-requirement-field span {
+.search-requirement-field span,
+.biome-size-field > span:first-child {
   color: #8f9aac;
   font-size: 0.66rem;
   font-weight: 700;
@@ -118,6 +119,47 @@
   color: #e7ebf1;
   background: #0b1017;
 }
+
+.search-requirement-fields--biome {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.biome-size-field {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 0.35rem;
+}
+
+.biome-size-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.biome-size-control input {
+  width: 100%;
+  accent-color: #54d692;
+}
+
+.biome-size-control output {
+  min-width: 10.5rem;
+  color: #dce2eb;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.biome-size-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  color: #657184;
+  font-size: 0.58rem;
+  text-align: center;
+}
+
+.biome-size-labels span:first-child { text-align: left; }
+.biome-size-labels span:last-child { text-align: right; }
 
 .filter-catalog-search input {
   padding: 0.55rem 0.6rem;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  biomeSizeRadiusBlocks,
+  createBiomeRequirement,
   createVillageRequirement,
   DEFAULT_VILLAGE_RADIUS_BLOCKS,
   type SearchRequirement,
@@ -39,5 +41,23 @@ describe('search requirements', () => {
 
     expect(requirement.kind).toBe('structure')
     expect(requirement.structureType).toBe('village')
+  })
+
+  it('creates a taiga requirement with a useful default size', () => {
+    expect(createBiomeRequirement('taiga-1', 'taiga')).toEqual({
+      kind: 'biome',
+      id: 'taiga-1',
+      biomeType: 'taiga',
+      center: { x: 0, z: 0 },
+      size: 'big',
+    })
+  })
+
+  it('maps semantic biome sizes to minimum radii', () => {
+    expect(biomeSizeRadiusBlocks('tiny')).toBe(16)
+    expect(biomeSizeRadiusBlocks('small')).toBe(32)
+    expect(biomeSizeRadiusBlocks('big')).toBe(64)
+    expect(biomeSizeRadiusBlocks('gigantic')).toBe(128)
+    expect(biomeSizeRadiusBlocks('enormous')).toBe(256)
   })
 })

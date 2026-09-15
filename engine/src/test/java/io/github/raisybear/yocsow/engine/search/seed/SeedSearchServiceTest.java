@@ -99,6 +99,33 @@ class SeedSearchServiceTest {
   }
 
   @Test
+  void allowsBiomeRequirementsToShareTheSameTargetPosition() {
+    StructureLocator biomeLocator =
+        new StructureLocator() {
+          @Override
+          public StructureType structureType() {
+            return StructureType.TAIGA;
+          }
+
+          @Override
+          public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+            return Optional.of(request.requirement().center());
+          }
+        };
+    BlockPosition center = new BlockPosition(64, -128);
+    List<StructureRequirement> requirements =
+        List.of(
+            new StructureRequirement("taiga-1", StructureType.TAIGA, center, 64),
+            new StructureRequirement("taiga-2", StructureType.TAIGA, center, 64));
+
+    SeedSearchResult result =
+        serviceUsing(biomeLocator)
+            .search(new SeedSearchRequest(42, 1, MinecraftVersion.JAVA_1_21, requirements, 1));
+
+    assertEquals(2, result.candidates().getFirst().matchedRequirementCount());
+  }
+
+  @Test
   void evaluatesSeedsAcrossABoundedWorkerPool() {
     ForkJoinPool workerPool = new ForkJoinPool(2);
     ConcurrencyTrackingVillageLocator locator = new ConcurrencyTrackingVillageLocator();

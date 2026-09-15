@@ -250,9 +250,9 @@ impl SeedSearchRequirement {
 
         let structure_type = requirement.structure_type.trim().to_owned();
 
-        if structure_type != "village" {
+        if structure_type != "village" && structure_type != "taiga" {
             return Err(input_error(format!(
-                "unsupported structure type: {structure_type}"
+                "unsupported search target type: {structure_type}"
             )));
         }
 
@@ -593,9 +593,9 @@ impl StructureMatch {
             return Err(protocol_error("engine returned a blank requirement ID"));
         }
 
-        if self.structure_type != "village" {
+        if self.structure_type != "village" && self.structure_type != "taiga" {
             return Err(protocol_error(
-                "engine returned an unsupported structure type",
+                "engine returned an unsupported search target type",
             ));
         }
 
@@ -728,6 +728,19 @@ mod tests {
         .expect_err("duplicate IDs should fail");
 
         assert_input_error(error, "duplicate requirement id: village-1");
+    }
+
+    #[test]
+    fn query_accepts_taiga_requirements() {
+        let mut biome = requirement("taiga-1", "64", "-128", "256");
+        biome.structure_type = "taiga".to_owned();
+
+        let query = SeedSearchQuery::parse("42", 1, "1.21", vec![biome], 1)
+            .expect("taiga requirement should be valid");
+        let value = serde_json::to_value(query).expect("query should serialize");
+
+        assert_eq!(value["requirements"][0]["structureType"], "taiga");
+        assert_eq!(value["requirements"][0]["radiusBlocks"], 256);
     }
 
     #[test]

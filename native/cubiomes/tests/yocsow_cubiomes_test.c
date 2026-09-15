@@ -378,6 +378,75 @@ static void rejects_invalid_batch_arguments(void) {
       status);
 }
 
+static void biome_batch_matches_scalar_results(void) {
+  const int32_t seed_count = 8;
+  const int32_t area_count = 2;
+  const struct YocsowBiomeSearchArea areas[2] = {
+      {YOCSOW_BIOME_TAIGA, 16, 0, 0},
+      {YOCSOW_BIOME_TAIGA, 64, 512, -512}};
+  int32_t matches[16] = {0};
+
+  int32_t status = yocsow_match_biomes_batch(
+      YOCSOW_MC_JAVA_1_21,
+      -4,
+      seed_count,
+      areas,
+      area_count,
+      16,
+      matches);
+
+  expect_equal("biome batch status", YOCSOW_CUBIOMES_OK, status);
+
+  for (int32_t seed_index = 0; seed_index < seed_count; seed_index++) {
+    for (int32_t area_index = 0; area_index < area_count; area_index++) {
+      int32_t expected_match = 0;
+      const struct YocsowBiomeSearchArea *area = &areas[area_index];
+      int32_t scalar_status = yocsow_matches_biome(
+          YOCSOW_MC_JAVA_1_21,
+          -4 + seed_index,
+          area->biome,
+          area->center_x,
+          area->center_z,
+          area->radius_blocks,
+          &expected_match);
+
+      expect_equal("scalar biome status", YOCSOW_CUBIOMES_OK, scalar_status);
+      expect_equal(
+          "biome batch match",
+          expected_match,
+          matches[seed_index * area_count + area_index]);
+    }
+  }
+}
+
+static void rejects_invalid_biome_batch_arguments(void) {
+  struct YocsowBiomeSearchArea area = {
+      999,
+      64,
+      0,
+      0};
+  int32_t match = 123;
+
+  int32_t status = yocsow_match_biomes_batch(
+      YOCSOW_MC_JAVA_1_21, 42, 1, &area, 1, 1, &match);
+
+  expect_equal(
+      "unsupported biome status",
+      YOCSOW_CUBIOMES_INVALID_ARGUMENT,
+      status);
+  expect_equal("invalid biome leaves match unchanged", 123, match);
+
+  area.biome = YOCSOW_BIOME_TAIGA;
+  status = yocsow_match_biomes_batch(
+      YOCSOW_MC_JAVA_1_21, 42, 1, &area, 1, 0, &match);
+
+  expect_equal(
+      "small biome buffer status",
+      YOCSOW_CUBIOMES_BUFFER_TOO_SMALL,
+      status);
+  expect_equal("small biome buffer leaves match unchanged", 123, match);
+}
+
 struct ExpectedSeedCandidate {
   int64_t seed;
   int64_t distance_squared;
@@ -784,6 +853,8 @@ int main(void) {
   batch_matches_individual_searches();
   rejects_small_batch_buffers_without_writing();
   rejects_invalid_batch_arguments();
+  biome_batch_matches_scalar_results();
+  rejects_invalid_biome_batch_arguments();
   seed_search_matches_scalar_results();
   seed_search_assigns_distinct_villages();
   rejects_invalid_seed_search_buffers();

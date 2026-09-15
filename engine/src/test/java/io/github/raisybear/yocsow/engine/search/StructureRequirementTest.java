@@ -1,7 +1,9 @@
 package io.github.raisybear.yocsow.engine.search;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -56,6 +58,9 @@ class StructureRequirementTest {
   @Test
   void resolvesStructureTypesByStableIdentifier() {
     assertEquals(StructureType.VILLAGE, StructureType.fromIdentifier("village"));
+    assertEquals(StructureType.TAIGA, StructureType.fromIdentifier("taiga"));
+    assertTrue(StructureType.VILLAGE.requiresDistinctPosition());
+    assertFalse(StructureType.TAIGA.requiresDistinctPosition());
   }
 
   @Test
