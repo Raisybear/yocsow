@@ -275,6 +275,15 @@ public final class SeedSearchService {
     PlannedRequirement requirement = searchPlan.requirements().get(requirementIndex);
     List<BlockPosition> candidates = candidatesBySearch.get(requirement.searchIndex());
 
+    if (!requirement.structureType().requiresDistinctPosition()) {
+      if (candidates.isEmpty()) {
+        return false;
+      }
+
+      assignments[requirementIndex] = candidates.getFirst();
+      return true;
+    }
+
     for (BlockPosition position : candidates) {
       LocatedStructure structure = new LocatedStructure(requirement.structureType(), position);
 

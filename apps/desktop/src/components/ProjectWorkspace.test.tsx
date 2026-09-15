@@ -11,7 +11,7 @@ import { ProjectWorkspace } from './ProjectWorkspace'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 
 vi.mock('../native/projects', () => ({
-  PROJECT_FORMAT_VERSION: 3,
+  PROJECT_FORMAT_VERSION: 4,
   openLocalProject: vi.fn(),
   saveLocalProject: vi.fn(),
   selectProjectSavePath: vi.fn(),
@@ -86,7 +86,7 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Loaded world.yocsow',
         project: {
-          formatVersion: 3,
+          formatVersion: 4,
           name: 'Loaded world',
           searchRequirements: [
             {
@@ -154,7 +154,7 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Survival world.yocsow',
       {
-        formatVersion: 3,
+        formatVersion: 4,
         name: 'Survival world',
         searchRequirements: [],
       },
@@ -216,7 +216,7 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Village search.yocsow',
       {
-        formatVersion: 3,
+        formatVersion: 4,
         name: 'Village search',
         searchRequirements: [
           {
@@ -246,7 +246,7 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Existing.yocsow',
         project: {
-          formatVersion: 3,
+          formatVersion: 4,
           name: 'Existing',
           searchRequirements: [],
         },
@@ -277,7 +277,7 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Existing.yocsow',
       {
-        formatVersion: 3,
+        formatVersion: 4,
         name: 'Existing updated',
         searchRequirements: [],
       },
@@ -296,7 +296,7 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Original.yocsow',
         project: {
-          formatVersion: 3,
+          formatVersion: 4,
           name: 'Original',
           searchRequirements: [],
         },
@@ -325,7 +325,7 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Copy.yocsow',
       {
-        formatVersion: 3,
+        formatVersion: 4,
         name: 'Original',
         searchRequirements: [],
       },

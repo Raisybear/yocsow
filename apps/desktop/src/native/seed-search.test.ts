@@ -44,4 +44,29 @@ describe('continuous seed search request', () => {
       'First seed must be a signed 64-bit integer.',
     )
   })
+
+  it('serializes biome types and semantic sizes for the engine', () => {
+    const request = createSeedSearchRequest(
+      BigInt(42),
+      [
+        {
+          kind: 'biome',
+          id: 'taiga-1',
+          biomeType: 'taiga',
+          center: { x: 120, z: -340 },
+          size: 'gigantic',
+        },
+      ],
+      5,
+    )
+
+    expect(request.requirements).toEqual([
+      {
+        id: 'taiga-1',
+        structureType: 'taiga',
+        center: { x: '120', z: '-340' },
+        radiusBlocks: '128',
+      },
+    ])
+  })
 })

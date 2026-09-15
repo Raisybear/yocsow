@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import type { SearchRequirement } from '../domain/search-requirements'
 
-export const PROJECT_FORMAT_VERSION = 3
+export const PROJECT_FORMAT_VERSION = 4
 
 export interface ProjectDocument {
   formatVersion: number

@@ -37,7 +37,8 @@ public record SeedSearchCandidate(
       MatchedStructure matchedStructure =
           new MatchedStructure(nonNullMatch.structureType(), nonNullMatch.actualPosition());
 
-      if (!matchedStructures.add(matchedStructure)) {
+      if (nonNullMatch.structureType().requiresDistinctPosition()
+          && !matchedStructures.add(matchedStructure)) {
         throw new IllegalArgumentException(
             "duplicate matched structure: "
                 + nonNullMatch.structureType().identifier()

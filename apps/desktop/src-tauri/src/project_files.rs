@@ -8,7 +8,8 @@ use std::path::Path;
 
 const VERSION_ONE_PROJECT_FORMAT: u32 = 1;
 const VERSION_TWO_PROJECT_FORMAT: u32 = 2;
-const PROJECT_FORMAT_VERSION: u32 = 3;
+const VERSION_THREE_PROJECT_FORMAT: u32 = 3;
+const PROJECT_FORMAT_VERSION: u32 = 4;
 const PROJECT_EXTENSION: &str = "yocsow";
 const MAX_PROJECT_FILE_SIZE: usize = 1024 * 1024;
 const MAX_PROJECT_NAME_LENGTH: usize = 120;
@@ -47,12 +48,36 @@ pub enum ProjectSearchRequirement {
         #[serde(rename = "radiusBlocks")]
         radius_blocks: u64,
     },
+    #[serde(rename = "biome")]
+    Biome {
+        id: String,
+        #[serde(rename = "biomeType")]
+        biome_type: ProjectBiomeType,
+        center: ProjectBlockPosition,
+        size: ProjectBiomeSize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectStructureType {
     Village,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectBiomeType {
+    Taiga,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectBiomeSize {
+    Tiny,
+    Small,
+    Big,
+    Gigantic,
+    Enormous,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,6 +130,26 @@ impl VersionTwoProjectDocument {
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VersionThreeProjectDocument {
+    format_version: u32,
+    name: String,
+    search_requirements: Vec<ProjectSearchRequirement>,
+}
+
+impl VersionThreeProjectDocument {
+    fn migrate(self) -> ProjectDocument {
+        debug_assert_eq!(self.format_version, VERSION_THREE_PROJECT_FORMAT);
+
+        ProjectDocument {
+            format_version: PROJECT_FORMAT_VERSION,
+            name: self.name,
+            search_requirements: self.search_requirements,
+        }
+    }
+}
+
 impl ProjectDocument {
     fn validate(&self) -> Result<(), ProjectFileError> {
         if self.format_version != PROJECT_FORMAT_VERSION {
@@ -137,47 +182,63 @@ impl ProjectDocument {
         let mut requirement_ids = HashSet::new();
 
         for requirement in &self.search_requirements {
+            validate_requirement_id(requirement.id(), &mut requirement_ids)?;
+
             match requirement {
-                ProjectSearchRequirement::Structure {
-                    id, radius_blocks, ..
-                } => {
-                    let trimmed_id = id.trim();
-
-                    if trimmed_id.is_empty() {
-                        return Err(ProjectFileError::Validation(
-                            "search requirement ID must not be empty".into(),
-                        ));
-                    }
-
-                    if trimmed_id.chars().count() > MAX_REQUIREMENT_ID_LENGTH {
-                        return Err(ProjectFileError::Validation(format!(
-                            "search requirement ID must not exceed {MAX_REQUIREMENT_ID_LENGTH} characters"
-                        )));
-                    }
-
-                    if trimmed_id != id {
-                        return Err(ProjectFileError::Validation(
-                            "search requirement ID must not contain surrounding whitespace".into(),
-                        ));
-                    }
-
-                    if !requirement_ids.insert(id) {
-                        return Err(ProjectFileError::Validation(format!(
-                            "duplicate search requirement ID: {id}"
-                        )));
-                    }
-
+                ProjectSearchRequirement::Structure { radius_blocks, .. } => {
                     if *radius_blocks == 0 || *radius_blocks > MAX_SEARCH_RADIUS_BLOCKS {
                         return Err(ProjectFileError::Validation(format!(
                             "search radius must be between 1 and {MAX_SEARCH_RADIUS_BLOCKS} blocks"
                         )));
                     }
                 }
+                ProjectSearchRequirement::Biome { .. } => {}
             }
         }
 
         Ok(())
     }
+}
+
+impl ProjectSearchRequirement {
+    fn id(&self) -> &str {
+        match self {
+            Self::Structure { id, .. } | Self::Biome { id, .. } => id,
+        }
+    }
+}
+
+fn validate_requirement_id<'a>(
+    id: &'a str,
+    requirement_ids: &mut HashSet<&'a str>,
+) -> Result<(), ProjectFileError> {
+    let trimmed_id = id.trim();
+
+    if trimmed_id.is_empty() {
+        return Err(ProjectFileError::Validation(
+            "search requirement ID must not be empty".into(),
+        ));
+    }
+
+    if trimmed_id.chars().count() > MAX_REQUIREMENT_ID_LENGTH {
+        return Err(ProjectFileError::Validation(format!(
+            "search requirement ID must not exceed {MAX_REQUIREMENT_ID_LENGTH} characters"
+        )));
+    }
+
+    if trimmed_id != id {
+        return Err(ProjectFileError::Validation(
+            "search requirement ID must not contain surrounding whitespace".into(),
+        ));
+    }
+
+    if !requirement_ids.insert(id) {
+        return Err(ProjectFileError::Validation(format!(
+            "duplicate search requirement ID: {id}"
+        )));
+    }
+
+    Ok(())
 }
 
 pub(crate) fn load_project(path: &Path) -> Result<ProjectDocument, ProjectFileError> {
@@ -215,6 +276,10 @@ pub(crate) fn load_project(path: &Path) -> Result<ProjectDocument, ProjectFileEr
         }
         version if version == u64::from(VERSION_TWO_PROJECT_FORMAT) => {
             let project: VersionTwoProjectDocument = serde_json::from_value(value)?;
+            project.migrate()
+        }
+        version if version == u64::from(VERSION_THREE_PROJECT_FORMAT) => {
+            let project: VersionThreeProjectDocument = serde_json::from_value(value)?;
             project.migrate()
         }
         version if version == u64::from(PROJECT_FORMAT_VERSION) => serde_json::from_value(value)?,
@@ -306,9 +371,10 @@ impl From<serde_json::Error> for ProjectFileError {
 #[cfg(test)]
 mod tests {
     use super::{
-        PROJECT_FORMAT_VERSION, ProjectBlockPosition, ProjectDocument, ProjectSearchRequirement,
-        ProjectStructureType, VERSION_ONE_PROJECT_FORMAT, VERSION_TWO_PROJECT_FORMAT, load_project,
-        save_project,
+        PROJECT_FORMAT_VERSION, ProjectBiomeSize, ProjectBiomeType, ProjectBlockPosition,
+        ProjectDocument, ProjectSearchRequirement, ProjectStructureType,
+        VERSION_ONE_PROJECT_FORMAT, VERSION_THREE_PROJECT_FORMAT, VERSION_TWO_PROJECT_FORMAT,
+        load_project, save_project,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -327,7 +393,7 @@ mod tests {
         let loaded = load_project(&path).expect("project should be loaded");
 
         assert!(contents.ends_with('\n'));
-        assert!(contents.contains(r#""formatVersion": 3"#));
+        assert!(contents.contains(r#""formatVersion": 4"#));
         assert!(!contents.contains(r#""seedRange""#));
         assert!(contents.contains(r#""searchRequirements": []"#));
         assert_eq!(loaded, project);
@@ -349,6 +415,25 @@ mod tests {
         assert!(contents.contains(r#""kind": "structure""#));
         assert!(contents.contains(r#""structureType": "village""#));
         assert!(contents.contains(r#""radiusBlocks": 1000"#));
+        assert_eq!(loaded, project);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn saves_and_loads_biome_requirements() {
+        let path = test_path("taiga-search.yocsow");
+        let mut project = sample_project();
+        project.search_requirements.push(sample_biome_requirement());
+
+        save_project(&path, &project).expect("project should be saved");
+
+        let contents = fs::read_to_string(&path).expect("saved project should be readable");
+        let loaded = load_project(&path).expect("project should be loaded");
+
+        assert!(contents.contains(r#""kind": "biome""#));
+        assert!(contents.contains(r#""biomeType": "taiga""#));
+        assert!(contents.contains(r#""size": "big""#));
         assert_eq!(loaded, project);
 
         remove_test_directory(&path);
@@ -420,6 +505,36 @@ mod tests {
     }
 
     #[test]
+    fn migrates_version_three_projects_and_keeps_requirements() {
+        let path = test_path("version-three.yocsow");
+
+        fs::write(
+            &path,
+            format!(
+                r#"{{
+                  "formatVersion": {VERSION_THREE_PROJECT_FORMAT},
+                  "name": "Village search",
+                  "searchRequirements": [{{
+                    "kind": "structure",
+                    "id": "village-1",
+                    "structureType": "village",
+                    "center": {{ "x": 120, "z": -340 }},
+                    "radiusBlocks": 1000
+                  }}]
+                }}"#
+            ),
+        )
+        .expect("version three project should be written");
+
+        let migrated = load_project(&path).expect("version three project should be migrated");
+
+        assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
     fn rejects_unsupported_format_versions() {
         let path = test_path("future.yocsow");
         let mut project = sample_project();
@@ -443,8 +558,10 @@ mod tests {
         let mut project = sample_project();
         let mut requirement = sample_requirement();
 
-        let ProjectSearchRequirement::Structure { radius_blocks, .. } = &mut requirement;
-        *radius_blocks = 0;
+        match &mut requirement {
+            ProjectSearchRequirement::Structure { radius_blocks, .. } => *radius_blocks = 0,
+            ProjectSearchRequirement::Biome { .. } => unreachable!(),
+        }
 
         project.search_requirements.push(requirement);
 
@@ -523,6 +640,15 @@ mod tests {
             structure_type: ProjectStructureType::Village,
             center: ProjectBlockPosition { x: 120, z: -340 },
             radius_blocks: 1_000,
+        }
+    }
+
+    fn sample_biome_requirement() -> ProjectSearchRequirement {
+        ProjectSearchRequirement::Biome {
+            id: "taiga-1".into(),
+            biome_type: ProjectBiomeType::Taiga,
+            center: ProjectBlockPosition { x: 64, z: -128 },
+            size: ProjectBiomeSize::Big,
         }
     }
 

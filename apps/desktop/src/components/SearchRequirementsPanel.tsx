@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import {
+  BIOME_SIZE_OPTIONS,
+  createBiomeRequirement,
   createVillageRequirement,
+  type BiomeRequirement,
   type SearchRequirement,
   type StructureRequirement,
 } from '../domain/search-requirements'
@@ -30,7 +33,7 @@ interface FilterCatalogItem {
   category: FilterCategory
   name: string
   description: string
-  available: boolean
+  createRequirement?: (id: string) => SearchRequirement
 }
 
 const filterCatalog: FilterCatalogItem[] = [
@@ -39,42 +42,38 @@ const filterCatalog: FilterCatalogItem[] = [
     category: 'structures',
     name: 'Village',
     description: 'Locate villages around a target position.',
-    available: true,
+    createRequirement: createVillageRequirement,
   },
   {
     id: 'ruined-portal',
     category: 'structures',
     name: 'Ruined Portal',
     description: 'Structure support is planned.',
-    available: false,
   },
   {
     id: 'ocean-monument',
     category: 'structures',
     name: 'Ocean Monument',
     description: 'Structure support is planned.',
-    available: false,
   },
   {
     id: 'taiga',
     category: 'biomes',
     name: 'Taiga',
-    description: 'Biome filtering requires engine support.',
-    available: false,
+    description: 'Require a Taiga biome around a target position.',
+    createRequirement: (id) => createBiomeRequirement(id, 'taiga'),
   },
   {
     id: 'forest',
     category: 'biomes',
     name: 'Forest',
     description: 'Biome filtering requires engine support.',
-    available: false,
   },
   {
     id: 'ocean',
     category: 'biomes',
     name: 'Ocean',
     description: 'Biome filtering requires engine support.',
-    available: false,
   },
 ]
 
@@ -158,15 +157,19 @@ export function SearchRequirementsPanel({
       item.name.toLowerCase().includes(filterQuery.toLowerCase()),
   )
 
-  function addVillageRequirement(): void {
+  function addRequirement(item: FilterCatalogItem): void {
+    if (item.createRequirement === undefined) {
+      return
+    }
+
     onChange([
       ...requirements,
-      createVillageRequirement(createRequirementId()),
+      item.createRequirement(createRequirementId()),
     ])
   }
 
   function updateRequirement(
-    updatedRequirement: StructureRequirement,
+    updatedRequirement: SearchRequirement,
   ): void {
     onChange(
       requirements.map((requirement) =>
@@ -256,30 +259,34 @@ export function SearchRequirementsPanel({
             role="tabpanel"
             aria-labelledby={`${activeCategory}-tab`}
           >
-            {visibleCatalogItems.map((item) => (
-              <button
-                className="filter-catalog-item"
-                type="button"
-                disabled={!item.available}
-                aria-label={
-                  item.available
-                    ? `Add ${item.name} filter`
-                    : `${item.name} unavailable`
-                }
-                onClick={
-                  item.id === 'village'
-                    ? addVillageRequirement
-                    : undefined
-                }
-                key={item.id}
-              >
-                <strong>{item.name}</strong>
-                <span>{item.description}</span>
-                <small>
-                  {item.available ? 'Add filter' : 'Engine support required'}
-                </small>
-              </button>
-            ))}
+            {visibleCatalogItems.map((item) => {
+              const available = item.createRequirement !== undefined
+
+              return (
+                <button
+                  className="filter-catalog-item"
+                  type="button"
+                  disabled={!available}
+                  aria-label={
+                    available
+                      ? `Add ${item.name} filter`
+                      : `${item.name} unavailable`
+                  }
+                  onClick={() => {
+                    addRequirement(item)
+                  }}
+                  key={item.id}
+                >
+                  <strong>{item.name}</strong>
+                  <span>{item.description}</span>
+                  <small>
+                    {available
+                      ? 'Add filter'
+                      : 'Engine support required'}
+                  </small>
+                </button>
+              )
+            })}
 
             {visibleCatalogItems.length === 0 && (
               <p className="filter-catalog-empty">
@@ -302,84 +309,187 @@ export function SearchRequirementsPanel({
             <div className="search-requirements-empty">
               <strong>No filters added yet</strong>
               <p>
-                Choose an available structure filter from the catalog.
+                Choose an available filter from the catalog.
               </p>
             </div>
           ) : (
             <div className="search-requirements-list">
-              {requirements.map((requirement, index) => (
-                <fieldset
-                  className="search-requirement-card"
-                  key={requirement.id}
-                >
-                  <legend>Village requirement {index + 1}</legend>
-
-                  <div className="search-requirement-card-heading">
-                    <div>
-                      <strong>Village</strong>
-                      <span>
-                        Structure within a radius of the target position
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      aria-label={`Remove Village requirement ${index + 1}`}
-                      onClick={() => {
-                        removeRequirement(requirement.id)
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-
-                  <div className="search-requirement-fields">
-                    <IntegerInput
-                      label="X coordinate"
-                      value={requirement.center.x}
-                      onChange={(x) => {
-                        updateRequirement({
-                          ...requirement,
-                          center: {
-                            ...requirement.center,
-                            x,
-                          },
-                        })
-                      }}
-                    />
-
-                    <IntegerInput
-                      label="Z coordinate"
-                      value={requirement.center.z}
-                      onChange={(z) => {
-                        updateRequirement({
-                          ...requirement,
-                          center: {
-                            ...requirement.center,
-                            z,
-                          },
-                        })
-                      }}
-                    />
-
-                    <IntegerInput
-                      label="Radius in blocks"
-                      value={requirement.radiusBlocks}
-                      minimum={1}
-                      onChange={(radiusBlocks) => {
-                        updateRequirement({
-                          ...requirement,
-                          radiusBlocks,
-                        })
-                      }}
-                    />
-                  </div>
-                </fieldset>
-              ))}
+              {requirements.map((requirement, index) =>
+                requirement.kind === 'structure' ? (
+                  <StructureRequirementCard
+                    requirement={requirement}
+                    index={index}
+                    onChange={updateRequirement}
+                    onRemove={removeRequirement}
+                    key={requirement.id}
+                  />
+                ) : (
+                  <BiomeRequirementCard
+                    requirement={requirement}
+                    index={index}
+                    onChange={updateRequirement}
+                    onRemove={removeRequirement}
+                    key={requirement.id}
+                  />
+                ),
+              )}
             </div>
           )}
         </div>
       </div>
     </section>
+  )
+}
+
+interface RequirementCardProps<T extends SearchRequirement> {
+  requirement: T
+  index: number
+  onChange: (requirement: SearchRequirement) => void
+  onRemove: (id: string) => void
+}
+
+function StructureRequirementCard({
+  requirement,
+  index,
+  onChange,
+  onRemove,
+}: RequirementCardProps<StructureRequirement>) {
+  return (
+    <fieldset className="search-requirement-card">
+      <legend>Village requirement {index + 1}</legend>
+      <RequirementCardHeading
+        name="Village"
+        description="Structure within a radius of the target position"
+        index={index}
+        onRemove={() => onRemove(requirement.id)}
+      />
+      <div className="search-requirement-fields">
+        <CoordinateInputs requirement={requirement} onChange={onChange} />
+        <IntegerInput
+          label="Radius in blocks"
+          value={requirement.radiusBlocks}
+          minimum={1}
+          onChange={(radiusBlocks) => {
+            onChange({ ...requirement, radiusBlocks })
+          }}
+        />
+      </div>
+    </fieldset>
+  )
+}
+
+function BiomeRequirementCard({
+  requirement,
+  index,
+  onChange,
+  onRemove,
+}: RequirementCardProps<BiomeRequirement>) {
+  const sizeIndex = BIOME_SIZE_OPTIONS.findIndex(
+    (option) => option.value === requirement.size,
+  )
+  const selectedSize = BIOME_SIZE_OPTIONS[sizeIndex]
+
+  return (
+    <fieldset className="search-requirement-card">
+      <legend>Taiga requirement {index + 1}</legend>
+      <RequirementCardHeading
+        name="Taiga"
+        description="Biome with the selected minimum extent around the target"
+        index={index}
+        onRemove={() => onRemove(requirement.id)}
+      />
+      <div className="search-requirement-fields search-requirement-fields--biome">
+        <CoordinateInputs requirement={requirement} onChange={onChange} />
+        <label className="biome-size-field">
+          <span>Biome size</span>
+          <div className="biome-size-control">
+            <input
+              type="range"
+              aria-label="Biome size"
+              min={0}
+              max={BIOME_SIZE_OPTIONS.length - 1}
+              step={1}
+              value={sizeIndex}
+              onChange={(event) => {
+                const option =
+                  BIOME_SIZE_OPTIONS[
+                    Number(event.currentTarget.value)
+                  ]
+                onChange({ ...requirement, size: option.value })
+              }}
+            />
+            <output>
+              {selectedSize.label} · {selectedSize.radiusBlocks} block radius
+            </output>
+          </div>
+          <span className="biome-size-labels" aria-hidden="true">
+            {BIOME_SIZE_OPTIONS.map((option) => (
+              <span key={option.value}>{option.label}</span>
+            ))}
+          </span>
+        </label>
+      </div>
+    </fieldset>
+  )
+}
+
+function RequirementCardHeading({
+  name,
+  description,
+  index,
+  onRemove,
+}: {
+  name: string
+  description: string
+  index: number
+  onRemove: () => void
+}) {
+  return (
+    <div className="search-requirement-card-heading">
+      <div>
+        <strong>{name}</strong>
+        <span>{description}</span>
+      </div>
+      <button
+        type="button"
+        aria-label={`Remove ${name} requirement ${index + 1}`}
+        onClick={onRemove}
+      >
+        Remove
+      </button>
+    </div>
+  )
+}
+
+function CoordinateInputs({
+  requirement,
+  onChange,
+}: {
+  requirement: SearchRequirement
+  onChange: (requirement: SearchRequirement) => void
+}) {
+  return (
+    <>
+      <IntegerInput
+        label="X coordinate"
+        value={requirement.center.x}
+        onChange={(x) =>
+          onChange({
+            ...requirement,
+            center: { ...requirement.center, x },
+          })
+        }
+      />
+      <IntegerInput
+        label="Z coordinate"
+        value={requirement.center.z}
+        onChange={(z) =>
+          onChange({
+            ...requirement,
+            center: { ...requirement.center, z },
+          })
+        }
+      />
+    </>
   )
 }

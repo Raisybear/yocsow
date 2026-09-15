@@ -50,6 +50,10 @@ function formatSeedCount(value: string): string {
   return numberFormatter.format(BigInt(value))
 }
 
+function matchName(structureType: string): string {
+  return structureType === 'taiga' ? 'Taiga biome' : 'Village'
+}
+
 export function SeedSearchResults({
   searchState,
   resultLimit,
@@ -198,7 +202,7 @@ export function SeedSearchResults({
                     {candidate.matches.map((match) => (
                       <li key={match.requirementId}>
                         <div>
-                          <strong>Village</strong>
+                          <strong>{matchName(match.structureType)}</strong>
                           <span>{match.requirementId}</span>
                         </div>
 
@@ -208,8 +212,9 @@ export function SeedSearchResults({
                         </p>
 
                         <span>
-                          Distance: {formatDistance(match.distanceBlocks)}{' '}
-                          blocks
+                          {match.structureType === 'taiga'
+                            ? `Minimum extent: ${match.radiusBlocks} block radius`
+                            : `Distance: ${formatDistance(match.distanceBlocks)} blocks`}
                         </span>
                       </li>
                     ))}
