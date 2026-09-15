@@ -99,7 +99,7 @@
 }
 
 .settings-panel-heading h2 {
-  font-size: clamp(1.35rem, 3vw, 2rem);
+  font-size: 2rem;
   letter-spacing: -0.03em;
 }
 

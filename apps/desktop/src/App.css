@@ -59,7 +59,7 @@
 .app-workspace-heading h1 {
   margin: 0;
   color: #f4f7fb;
-  font-size: clamp(1.35rem, 2vw, 1.75rem);
+  font-size: 1.75rem;
   letter-spacing: -0.025em;
   line-height: 1.1;
 }
@@ -128,7 +128,7 @@
 .app-placeholder h2 {
   margin: 0;
   color: #f4f7fb;
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-size: 2.25rem;
   letter-spacing: -0.03em;
 }
 
