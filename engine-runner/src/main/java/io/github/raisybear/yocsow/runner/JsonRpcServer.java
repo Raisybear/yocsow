@@ -2,6 +2,7 @@ package io.github.raisybear.yocsow.runner;
 
 import io.github.raisybear.yocsow.engine.search.seed.SeedSearchService;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocatorRegistry;
+import io.github.raisybear.yocsow.engine.search.structure.cubiomes.CubiomesBiomeLocator;
 import io.github.raisybear.yocsow.engine.search.structure.cubiomes.CubiomesVillageLocator;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -153,6 +154,7 @@ final class JsonRpcServer {
 
   private static SeedSearchService createSeedSearchService() {
     return new SeedSearchService(
-        new StructureLocatorRegistry(List.of(new CubiomesVillageLocator())));
+        new StructureLocatorRegistry(
+            List.of(new CubiomesVillageLocator(), CubiomesBiomeLocator.taiga())));
   }
 }

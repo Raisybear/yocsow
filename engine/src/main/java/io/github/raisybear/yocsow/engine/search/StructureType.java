@@ -1,16 +1,23 @@
 package io.github.raisybear.yocsow.engine.search;
 
 public enum StructureType {
-  VILLAGE("village");
+  VILLAGE("village", true),
+  TAIGA("taiga", false);
 
   private final String identifier;
+  private final boolean requiresDistinctPosition;
 
-  StructureType(String identifier) {
+  StructureType(String identifier, boolean requiresDistinctPosition) {
     this.identifier = identifier;
+    this.requiresDistinctPosition = requiresDistinctPosition;
   }
 
   public String identifier() {
     return identifier;
+  }
+
+  public boolean requiresDistinctPosition() {
+    return requiresDistinctPosition;
   }
 
   public static StructureType fromIdentifier(String identifier) {

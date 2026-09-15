@@ -30,6 +30,10 @@ enum YocsowMinecraftVersion {
   YOCSOW_MC_JAVA_1_21 = 1
 };
 
+enum YocsowBiome {
+  YOCSOW_BIOME_TAIGA = 1
+};
+
 enum YocsowResultLimits {
   YOCSOW_MAX_VILLAGE_RESULTS = 64
 };
@@ -38,7 +42,9 @@ enum YocsowBatchLimits {
   YOCSOW_MAX_VILLAGE_BATCH_SEEDS = 10000,
   YOCSOW_MAX_VILLAGE_SEARCH_AREAS = 32,
   YOCSOW_MAX_VILLAGE_REQUIREMENTS = 32,
-  YOCSOW_MAX_SEED_SEARCH_RESULTS = 100
+  YOCSOW_MAX_SEED_SEARCH_RESULTS = 100,
+  YOCSOW_MAX_BIOME_BATCH_SEEDS = 10000,
+  YOCSOW_MAX_BIOME_SEARCH_AREAS = 32
 };
 
 struct YocsowBlockPosition {
@@ -56,6 +62,13 @@ struct YocsowVillageSearchArea {
   int64_t center_x;
   int64_t center_z;
   int64_t radius_blocks;
+};
+
+struct YocsowBiomeSearchArea {
+  int32_t biome;
+  int32_t radius_blocks;
+  int64_t center_x;
+  int64_t center_z;
 };
 
 struct YocsowSeedSearchCandidate {
@@ -108,6 +121,31 @@ yocsow_find_villages_batch(
     int32_t *result_counts,
     int64_t result_position_capacity,
     struct YocsowBlockPosition *results);
+
+/*
+ * Checks whether one biome covers the center and eight perimeter samples.
+ * The radius therefore represents the requested minimum extent around the
+ * target point. Matches use [seed][area] order.
+ */
+YOCSOW_CUBIOMES_API int32_t
+yocsow_matches_biome(
+    int32_t minecraft_version,
+    int64_t seed,
+    int32_t biome,
+    int64_t center_x,
+    int64_t center_z,
+    int32_t radius_blocks,
+    int32_t *match);
+
+YOCSOW_CUBIOMES_API int32_t
+yocsow_match_biomes_batch(
+    int32_t minecraft_version,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowBiomeSearchArea *search_areas,
+    int32_t search_area_count,
+    int64_t match_capacity,
+    int32_t *matches);
 
 /*
  * Evaluates consecutive seeds entirely inside the native Cubiomes boundary.

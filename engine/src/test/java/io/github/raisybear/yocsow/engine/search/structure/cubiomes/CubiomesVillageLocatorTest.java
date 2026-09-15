@@ -597,6 +597,18 @@ class CubiomesVillageLocatorTest {
 
       return status;
     }
+
+    @Override
+    public int matchBiomesBatch(
+        int minecraftVersion,
+        long firstSeed,
+        int seedCount,
+        Pointer searchAreas,
+        int searchAreaCount,
+        long matchCapacity,
+        Pointer matches) {
+      return status;
+    }
   }
 
   private record SearchArea(long centerX, long centerZ, long radiusBlocks) {}

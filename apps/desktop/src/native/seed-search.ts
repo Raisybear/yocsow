@@ -1,9 +1,11 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import type {
+  BiomeType,
   SearchRequirement,
   StructureType,
 } from '../domain/search-requirements'
+import { biomeSizeRadiusBlocks } from '../domain/search-requirements'
 
 const MINIMUM_SIGNED_64_BIT_INTEGER = BigInt(
   '-9223372036854775808',
@@ -21,7 +23,7 @@ export interface SeedSearchPosition {
 
 export interface SeedSearchRequirement {
   id: string
-  structureType: StructureType
+  structureType: StructureType | BiomeType
   center: SeedSearchPosition
   radiusBlocks: string
 }
@@ -35,7 +37,7 @@ export interface SeedSearchRequest {
 
 export interface StructureMatch {
   requirementId: string
-  structureType: StructureType
+  structureType: StructureType | BiomeType
   targetCenter: SeedSearchPosition
   radiusBlocks: string
   actualPosition: SeedSearchPosition
@@ -114,12 +116,19 @@ export function createSeedSearchRequest(
     minecraftVersion: '1.21',
     requirements: requirements.map((requirement) => ({
       id: requirement.id,
-      structureType: requirement.structureType,
+      structureType:
+        requirement.kind === 'structure'
+          ? requirement.structureType
+          : requirement.biomeType,
       center: {
         x: String(requirement.center.x),
         z: String(requirement.center.z),
       },
-      radiusBlocks: String(requirement.radiusBlocks),
+      radiusBlocks: String(
+        requirement.kind === 'structure'
+          ? requirement.radiusBlocks
+          : biomeSizeRadiusBlocks(requirement.size),
+      ),
     })),
     resultLimit,
   }

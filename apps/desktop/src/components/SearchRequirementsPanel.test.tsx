@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { SearchRequirement } from '../domain/search-requirements'
@@ -159,7 +159,42 @@ describe('SearchRequirementsPanel', () => {
     ).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByLabelText('Search biomes')).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Taiga unavailable' }),
-    ).toBeDisabled()
+      screen.getByRole('button', { name: 'Add Taiga filter' }),
+    ).toBeEnabled()
+  })
+
+  it('adds and configures a taiga biome requirement', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+    await user.click(screen.getByRole('tab', { name: 'Biomes' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Add Taiga filter' }),
+    )
+
+    const requirement = screen.getByRole('group', {
+      name: 'Taiga requirement 1',
+    })
+    const xCoordinate = within(requirement).getByLabelText('X coordinate')
+    const zCoordinate = within(requirement).getByLabelText('Z coordinate')
+    const size = within(requirement).getByLabelText('Biome size')
+
+    expect(size).toHaveValue('2')
+    expect(within(requirement).getByText(/Big · 64 block radius/)).toBeInTheDocument()
+
+    await user.clear(xCoordinate)
+    await user.type(xCoordinate, '240')
+    await user.clear(zCoordinate)
+    await user.type(zCoordinate, '-80')
+    fireEvent.change(size, { target: { value: '4' } })
+
+    expect(renderedRequirements()).toMatchObject([
+      {
+        kind: 'biome',
+        biomeType: 'taiga',
+        center: { x: 240, z: -80 },
+        size: 'enormous',
+      },
+    ])
   })
 })

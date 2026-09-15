@@ -57,6 +57,41 @@ static int search_area_is_valid(
              YOCSOW_MAX_BLOCK_COORDINATE;
 }
 
+static int cubiomes_biome(int32_t biome) {
+  switch (biome) {
+    case YOCSOW_BIOME_TAIGA:
+      return taiga;
+    default:
+      return none;
+  }
+}
+
+static int biome_matches_with_generator(
+    const Generator *generator,
+    int biome,
+    int64_t center_x,
+    int64_t center_z,
+    int32_t radius_blocks) {
+  static const int32_t SAMPLE_OFFSETS[9][2] = {
+      {0, 0},
+      {-1, -1}, {0, -1}, {1, -1},
+      {-1, 0},             {1, 0},
+      {-1, 1},  {0, 1},   {1, 1}};
+
+  for (int32_t index = 0; index < 9; index++) {
+    int32_t x = (int32_t)(center_x +
+        (int64_t)SAMPLE_OFFSETS[index][0] * radius_blocks);
+    int32_t z = (int32_t)(center_z +
+        (int64_t)SAMPLE_OFFSETS[index][1] * radius_blocks);
+
+    if (getBiomeAt(generator, 1, x, 64, z) != biome) {
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
 static int64_t distance_squared(
     int64_t center_x,
     int64_t center_z,
@@ -782,6 +817,116 @@ int32_t yocsow_find_villages_batch(
           result_capacity,
           &result_counts[result_count_index],
           &results[result_position_index]);
+    }
+  }
+
+  return YOCSOW_CUBIOMES_OK;
+}
+
+int32_t yocsow_matches_biome(
+    int32_t minecraft_version,
+    int64_t seed,
+    int32_t biome,
+    int64_t center_x,
+    int64_t center_z,
+    int32_t radius_blocks,
+    int32_t *match) {
+  if (match == NULL || radius_blocks <= 0) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
+  int mc = cubiomes_version(minecraft_version);
+
+  if (mc == MC_UNDEF) {
+    return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
+  }
+
+  int native_biome = cubiomes_biome(biome);
+
+  if (native_biome == none) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
+  if (!search_area_is_valid(center_x, center_z, radius_blocks)) {
+    return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+  }
+
+  Generator generator;
+  setupGenerator(&generator, mc, 0);
+  applySeed(&generator, DIM_OVERWORLD, (uint64_t)seed);
+
+  *match = biome_matches_with_generator(
+      &generator, native_biome, center_x, center_z, radius_blocks);
+
+  return YOCSOW_CUBIOMES_OK;
+}
+
+int32_t yocsow_match_biomes_batch(
+    int32_t minecraft_version,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowBiomeSearchArea *search_areas,
+    int32_t search_area_count,
+    int64_t match_capacity,
+    int32_t *matches) {
+  if (search_areas == NULL || matches == NULL ||
+      seed_count <= 0 || seed_count > YOCSOW_MAX_BIOME_BATCH_SEEDS ||
+      search_area_count <= 0 ||
+      search_area_count > YOCSOW_MAX_BIOME_SEARCH_AREAS ||
+      match_capacity < 0) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
+  if (first_seed > INT64_MAX - (int64_t)(seed_count - 1)) {
+    return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+  }
+
+  int64_t required_match_capacity =
+      (int64_t)seed_count * search_area_count;
+
+  if (match_capacity < required_match_capacity) {
+    return YOCSOW_CUBIOMES_BUFFER_TOO_SMALL;
+  }
+
+  int mc = cubiomes_version(minecraft_version);
+
+  if (mc == MC_UNDEF) {
+    return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
+  }
+
+  int native_biomes[YOCSOW_MAX_BIOME_SEARCH_AREAS];
+
+  for (int32_t area_index = 0; area_index < search_area_count; area_index++) {
+    const struct YocsowBiomeSearchArea *area = &search_areas[area_index];
+    native_biomes[area_index] = cubiomes_biome(area->biome);
+
+    if (native_biomes[area_index] == none || area->radius_blocks <= 0) {
+      return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+    }
+
+    if (!search_area_is_valid(
+            area->center_x, area->center_z, area->radius_blocks)) {
+      return YOCSOW_CUBIOMES_OUT_OF_RANGE;
+    }
+  }
+
+  Generator generator;
+  setupGenerator(&generator, mc, 0);
+
+  for (int32_t seed_index = 0; seed_index < seed_count; seed_index++) {
+    uint64_t seed = (uint64_t)first_seed + (uint64_t)seed_index;
+    applySeed(&generator, DIM_OVERWORLD, seed);
+
+    for (int32_t area_index = 0; area_index < search_area_count; area_index++) {
+      const struct YocsowBiomeSearchArea *area = &search_areas[area_index];
+      int64_t match_index = (int64_t)seed_index * search_area_count + area_index;
+
+      matches[match_index] = biome_matches_with_generator(
+          &generator,
+          native_biomes[area_index],
+          area->center_x,
+          area->center_z,
+          area->radius_blocks);
     }
   }
 
