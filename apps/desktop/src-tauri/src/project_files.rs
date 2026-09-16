@@ -62,6 +62,7 @@ pub enum ProjectSearchRequirement {
 #[serde(rename_all = "camelCase")]
 pub enum ProjectStructureType {
     Village,
+    RuinedPortal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -440,6 +441,25 @@ mod tests {
     }
 
     #[test]
+    fn saves_and_loads_ruined_portal_requirements() {
+        let path = test_path("ruined-portal-search.yocsow");
+        let mut project = sample_project();
+        project
+            .search_requirements
+            .push(sample_ruined_portal_requirement());
+
+        save_project(&path, &project).expect("project should be saved");
+
+        let contents = fs::read_to_string(&path).expect("saved project should be readable");
+        let loaded = load_project(&path).expect("project should be loaded");
+
+        assert!(contents.contains(r#""structureType": "ruinedPortal""#));
+        assert_eq!(loaded, project);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
     fn migrates_version_one_projects() {
         let path = test_path("legacy.yocsow");
 
@@ -649,6 +669,15 @@ mod tests {
             biome_type: ProjectBiomeType::Taiga,
             center: ProjectBlockPosition { x: 64, z: -128 },
             size: ProjectBiomeSize::Big,
+        }
+    }
+
+    fn sample_ruined_portal_requirement() -> ProjectSearchRequirement {
+        ProjectSearchRequirement::Structure {
+            id: "portal-1".into(),
+            structure_type: ProjectStructureType::RuinedPortal,
+            center: ProjectBlockPosition { x: -800, z: 1200 },
+            radius_blocks: 640,
         }
     }
 

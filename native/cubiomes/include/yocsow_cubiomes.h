@@ -34,6 +34,11 @@ enum YocsowBiome {
   YOCSOW_BIOME_TAIGA = 1
 };
 
+enum YocsowStructure {
+  YOCSOW_STRUCTURE_VILLAGE = 1,
+  YOCSOW_STRUCTURE_RUINED_PORTAL = 2
+};
+
 enum YocsowResultLimits {
   YOCSOW_MAX_VILLAGE_RESULTS = 64
 };
@@ -93,6 +98,18 @@ yocsow_find_nearest_village(
     struct YocsowVillageResult *result);
 
 YOCSOW_CUBIOMES_API int32_t
+yocsow_find_structures(
+    int32_t minecraft_version,
+    int32_t structure,
+    int64_t seed,
+    int64_t center_x,
+    int64_t center_z,
+    int64_t radius_blocks,
+    int32_t result_capacity,
+    int32_t *result_count,
+    struct YocsowBlockPosition *results);
+
+YOCSOW_CUBIOMES_API int32_t
 yocsow_find_villages(
     int32_t minecraft_version,
     int64_t seed,
@@ -109,6 +126,20 @@ yocsow_find_villages(
  * [seed][area][result_capacity] order, with unused slots left unspecified.
  * Buffer capacities are measured in elements, not bytes.
  */
+YOCSOW_CUBIOMES_API int32_t
+yocsow_find_structures_batch(
+    int32_t minecraft_version,
+    int32_t structure,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowVillageSearchArea *search_areas,
+    int32_t search_area_count,
+    int32_t result_capacity,
+    int64_t result_count_capacity,
+    int32_t *result_counts,
+    int64_t result_position_capacity,
+    struct YocsowBlockPosition *results);
+
 YOCSOW_CUBIOMES_API int32_t
 yocsow_find_villages_batch(
     int32_t minecraft_version,

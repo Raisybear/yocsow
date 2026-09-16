@@ -116,6 +116,38 @@ describe('SearchRequirementsPanel', () => {
     ])
   })
 
+  it('adds and configures a ruined portal requirement', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+    await user.click(
+      screen.getByRole('button', { name: 'Add Ruined Portal filter' }),
+    )
+
+    const requirement = screen.getByRole('group', {
+      name: 'Ruined Portal requirement 1',
+    })
+    const xCoordinate = within(requirement).getByLabelText('X coordinate')
+    const zCoordinate = within(requirement).getByLabelText('Z coordinate')
+    const radius = within(requirement).getByLabelText('Radius in blocks')
+
+    await user.clear(xCoordinate)
+    await user.type(xCoordinate, '-800')
+    await user.clear(zCoordinate)
+    await user.type(zCoordinate, '1200')
+    await user.clear(radius)
+    await user.type(radius, '640')
+
+    expect(renderedRequirements()).toMatchObject([
+      {
+        kind: 'structure',
+        structureType: 'ruinedPortal',
+        center: { x: -800, z: 1200 },
+        radiusBlocks: 640,
+      },
+    ])
+  })
+
   it('removes an existing requirement', async () => {
     const user = userEvent.setup()
 

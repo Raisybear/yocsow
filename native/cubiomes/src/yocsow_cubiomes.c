@@ -66,6 +66,17 @@ static int cubiomes_biome(int32_t biome) {
   }
 }
 
+static int cubiomes_structure(int32_t structure) {
+  switch (structure) {
+    case YOCSOW_STRUCTURE_VILLAGE:
+      return Village;
+    case YOCSOW_STRUCTURE_RUINED_PORTAL:
+      return Ruined_Portal;
+    default:
+      return -1;
+  }
+}
+
 static int biome_matches_with_generator(
     const Generator *generator,
     int biome,
@@ -185,7 +196,8 @@ static void insert_candidate(
   *result_count = new_count;
 }
 
-static void find_villages_with_generator(
+static void find_structures_with_generator(
+    int structure_type,
     int mc,
     uint64_t seed,
     const StructureConfig *structure_config,
@@ -233,7 +245,7 @@ static void find_villages_with_generator(
       Pos candidate;
 
       if (!getStructurePos(
-              Village,
+              structure_type,
               mc,
               seed,
               region_x,
@@ -260,7 +272,7 @@ static void find_villages_with_generator(
       }
 
       if (!isViableStructurePos(
-              Village,
+              structure_type,
               generator,
               candidate.x,
               candidate.z,
@@ -635,8 +647,9 @@ int32_t yocsow_find_nearest_village(
   return YOCSOW_CUBIOMES_OK;
 }
 
-int32_t yocsow_find_villages(
+int32_t yocsow_find_structures(
     int32_t minecraft_version,
+    int32_t structure,
     int64_t seed,
     int64_t center_x,
     int64_t center_z,
@@ -670,10 +683,16 @@ int32_t yocsow_find_villages(
     return YOCSOW_CUBIOMES_OUT_OF_RANGE;
   }
 
+  int structure_type = cubiomes_structure(structure);
+
+  if (structure_type < 0) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
   StructureConfig structure_config;
 
   if (!getStructureConfig(
-          Village,
+          structure_type,
           mc,
           &structure_config)) {
     return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
@@ -687,7 +706,8 @@ int32_t yocsow_find_villages(
       DIM_OVERWORLD,
       (uint64_t)seed);
 
-  find_villages_with_generator(
+  find_structures_with_generator(
+      structure_type,
       mc,
       (uint64_t)seed,
       &structure_config,
@@ -702,8 +722,30 @@ int32_t yocsow_find_villages(
   return YOCSOW_CUBIOMES_OK;
 }
 
-int32_t yocsow_find_villages_batch(
+int32_t yocsow_find_villages(
     int32_t minecraft_version,
+    int64_t seed,
+    int64_t center_x,
+    int64_t center_z,
+    int64_t radius_blocks,
+    int32_t result_capacity,
+    int32_t *result_count,
+    struct YocsowBlockPosition *results) {
+  return yocsow_find_structures(
+      minecraft_version,
+      YOCSOW_STRUCTURE_VILLAGE,
+      seed,
+      center_x,
+      center_z,
+      radius_blocks,
+      result_capacity,
+      result_count,
+      results);
+}
+
+int32_t yocsow_find_structures_batch(
+    int32_t minecraft_version,
+    int32_t structure,
     int64_t first_seed,
     int32_t seed_count,
     const struct YocsowVillageSearchArea *search_areas,
@@ -739,6 +781,12 @@ int32_t yocsow_find_villages_batch(
     return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
   }
 
+  int structure_type = cubiomes_structure(structure);
+
+  if (structure_type < 0) {
+    return YOCSOW_CUBIOMES_INVALID_ARGUMENT;
+  }
+
   for (int32_t search_area_index = 0;
        search_area_index < search_area_count;
        search_area_index++) {
@@ -772,7 +820,7 @@ int32_t yocsow_find_villages_batch(
   StructureConfig structure_config;
 
   if (!getStructureConfig(
-          Village,
+          structure_type,
           mc,
           &structure_config)) {
     return YOCSOW_CUBIOMES_UNSUPPORTED_VERSION;
@@ -806,7 +854,8 @@ int32_t yocsow_find_villages_batch(
       const struct YocsowVillageSearchArea *search_area =
           &search_areas[search_area_index];
 
-      find_villages_with_generator(
+      find_structures_with_generator(
+          structure_type,
           mc,
           seed,
           &structure_config,
@@ -821,6 +870,31 @@ int32_t yocsow_find_villages_batch(
   }
 
   return YOCSOW_CUBIOMES_OK;
+}
+
+int32_t yocsow_find_villages_batch(
+    int32_t minecraft_version,
+    int64_t first_seed,
+    int32_t seed_count,
+    const struct YocsowVillageSearchArea *search_areas,
+    int32_t search_area_count,
+    int32_t result_capacity,
+    int64_t result_count_capacity,
+    int32_t *result_counts,
+    int64_t result_position_capacity,
+    struct YocsowBlockPosition *results) {
+  return yocsow_find_structures_batch(
+      minecraft_version,
+      YOCSOW_STRUCTURE_VILLAGE,
+      first_seed,
+      seed_count,
+      search_areas,
+      search_area_count,
+      result_capacity,
+      result_count_capacity,
+      result_counts,
+      result_position_capacity,
+      results);
 }
 
 int32_t yocsow_matches_biome(
@@ -1062,7 +1136,8 @@ int32_t yocsow_search_village_seeds(
       const struct YocsowVillageSearchArea *search_area =
           &search_areas[search_area_index];
 
-      find_villages_with_generator(
+      find_structures_with_generator(
+          Village,
           mc,
           seed,
           &structure_config,

@@ -69,4 +69,29 @@ describe('continuous seed search request', () => {
       },
     ])
   })
+
+  it('serializes ruined portal requirements for the engine', () => {
+    const request = createSeedSearchRequest(
+      BigInt(42),
+      [
+        {
+          kind: 'structure',
+          id: 'portal-1',
+          structureType: 'ruinedPortal',
+          center: { x: -800, z: 1200 },
+          radiusBlocks: 640,
+        },
+      ],
+      5,
+    )
+
+    expect(request.requirements).toEqual([
+      {
+        id: 'portal-1',
+        structureType: 'ruinedPortal',
+        center: { x: '-800', z: '1200' },
+        radiusBlocks: '640',
+      },
+    ])
+  })
 })
