@@ -250,7 +250,10 @@ impl SeedSearchRequirement {
 
         let structure_type = requirement.structure_type.trim().to_owned();
 
-        if structure_type != "village" && structure_type != "taiga" {
+        if structure_type != "village"
+            && structure_type != "ruinedPortal"
+            && structure_type != "taiga"
+        {
             return Err(input_error(format!(
                 "unsupported search target type: {structure_type}"
             )));
@@ -593,7 +596,10 @@ impl StructureMatch {
             return Err(protocol_error("engine returned a blank requirement ID"));
         }
 
-        if self.structure_type != "village" && self.structure_type != "taiga" {
+        if self.structure_type != "village"
+            && self.structure_type != "ruinedPortal"
+            && self.structure_type != "taiga"
+        {
             return Err(protocol_error(
                 "engine returned an unsupported search target type",
             ));
@@ -741,6 +747,19 @@ mod tests {
 
         assert_eq!(value["requirements"][0]["structureType"], "taiga");
         assert_eq!(value["requirements"][0]["radiusBlocks"], 256);
+    }
+
+    #[test]
+    fn query_accepts_ruined_portal_requirements() {
+        let mut portal = requirement("portal-1", "-800", "1200", "640");
+        portal.structure_type = "ruinedPortal".to_owned();
+
+        let query = SeedSearchQuery::parse("42", 1, "1.21", vec![portal], 1)
+            .expect("ruined portal requirement should be valid");
+        let value = serde_json::to_value(query).expect("query should serialize");
+
+        assert_eq!(value["requirements"][0]["structureType"], "ruinedPortal");
+        assert_eq!(value["requirements"][0]["radiusBlocks"], 640);
     }
 
     #[test]

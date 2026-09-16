@@ -2,10 +2,12 @@ import { useState } from 'react'
 import {
   BIOME_SIZE_OPTIONS,
   createBiomeRequirement,
+  createRuinedPortalRequirement,
   createVillageRequirement,
   type BiomeRequirement,
   type SearchRequirement,
   type StructureRequirement,
+  type StructureType,
 } from '../domain/search-requirements'
 import './SearchRequirementsPanel.css'
 
@@ -48,7 +50,8 @@ const filterCatalog: FilterCatalogItem[] = [
     id: 'ruined-portal',
     category: 'structures',
     name: 'Ruined Portal',
-    description: 'Structure support is planned.',
+    description: 'Locate ruined portals around a target position.',
+    createRequirement: createRuinedPortalRequirement,
   },
   {
     id: 'ocean-monument',
@@ -354,11 +357,13 @@ function StructureRequirementCard({
   onChange,
   onRemove,
 }: RequirementCardProps<StructureRequirement>) {
+  const presentation = structurePresentation(requirement.structureType)
+
   return (
     <fieldset className="search-requirement-card">
-      <legend>Village requirement {index + 1}</legend>
+      <legend>{presentation.name} requirement {index + 1}</legend>
       <RequirementCardHeading
-        name="Village"
+        name={presentation.name}
         description="Structure within a radius of the target position"
         index={index}
         onRemove={() => onRemove(requirement.id)}
@@ -376,6 +381,17 @@ function StructureRequirementCard({
       </div>
     </fieldset>
   )
+}
+
+function structurePresentation(structureType: StructureType): {
+  name: string
+} {
+  switch (structureType) {
+    case 'village':
+      return { name: 'Village' }
+    case 'ruinedPortal':
+      return { name: 'Ruined Portal' }
+  }
 }
 
 function BiomeRequirementCard({

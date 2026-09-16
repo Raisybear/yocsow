@@ -809,6 +809,67 @@ static void rejects_unsupported_versions(void) {
       status);
 }
 
+static void finds_ruined_portals_through_generic_structure_search(void) {
+  int32_t result_count = 0;
+  struct YocsowBlockPosition results[4];
+
+  int32_t status =
+      yocsow_find_structures(
+          YOCSOW_MC_JAVA_1_21,
+          YOCSOW_STRUCTURE_RUINED_PORTAL,
+          42,
+          0,
+          0,
+          5000,
+          4,
+          &result_count,
+          results);
+
+  expect_equal(
+      "ruined portal status",
+      YOCSOW_CUBIOMES_OK,
+      status);
+  expect_true(
+      "ruined portal found",
+      result_count > 0);
+
+  for (int32_t index = 0; index < result_count; index++) {
+    int64_t distance_squared =
+        (int64_t)results[index].x * results[index].x +
+        (int64_t)results[index].z * results[index].z;
+
+    expect_true(
+        "ruined portal inside radius",
+        distance_squared <= 5000LL * 5000LL);
+  }
+}
+
+static void rejects_unknown_generic_structure_types(void) {
+  int32_t result_count = 123;
+  struct YocsowBlockPosition result = {456, 789};
+
+  int32_t status =
+      yocsow_find_structures(
+          YOCSOW_MC_JAVA_1_21,
+          999,
+          42,
+          0,
+          0,
+          1000,
+          1,
+          &result_count,
+          &result);
+
+  expect_equal(
+      "unknown structure status",
+      YOCSOW_CUBIOMES_INVALID_ARGUMENT,
+      status);
+  expect_equal(
+      "unknown structure clears count",
+      0,
+      result_count);
+}
+
 static void rejects_invalid_radii(void) {
   struct YocsowVillageResult result;
 
@@ -858,6 +919,8 @@ int main(void) {
   seed_search_matches_scalar_results();
   seed_search_assigns_distinct_villages();
   rejects_invalid_seed_search_buffers();
+  finds_ruined_portals_through_generic_structure_search();
+  rejects_unknown_generic_structure_types();
   rejects_unsupported_versions();
   rejects_invalid_radii();
   rejects_searches_outside_world_border();

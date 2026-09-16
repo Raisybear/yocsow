@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   biomeSizeRadiusBlocks,
   createBiomeRequirement,
+  createRuinedPortalRequirement,
   createVillageRequirement,
-  DEFAULT_VILLAGE_RADIUS_BLOCKS,
+  DEFAULT_STRUCTURE_RADIUS_BLOCKS,
   type SearchRequirement,
 } from './search-requirements'
 
@@ -19,7 +20,17 @@ describe('search requirements', () => {
         x: 0,
         z: 0,
       },
-      radiusBlocks: DEFAULT_VILLAGE_RADIUS_BLOCKS,
+      radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
+    })
+  })
+
+  it('creates a ruined portal requirement with structure defaults', () => {
+    expect(createRuinedPortalRequirement('portal-1')).toEqual({
+      kind: 'structure',
+      id: 'portal-1',
+      structureType: 'ruinedPortal',
+      center: { x: 0, z: 0 },
+      radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
     })
   })
 

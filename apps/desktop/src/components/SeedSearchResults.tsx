@@ -51,7 +51,14 @@ function formatSeedCount(value: string): string {
 }
 
 function matchName(structureType: string): string {
-  return structureType === 'taiga' ? 'Taiga biome' : 'Village'
+  switch (structureType) {
+    case 'taiga':
+      return 'Taiga biome'
+    case 'ruinedPortal':
+      return 'Ruined Portal'
+    default:
+      return 'Village'
+  }
 }
 
 export function SeedSearchResults({

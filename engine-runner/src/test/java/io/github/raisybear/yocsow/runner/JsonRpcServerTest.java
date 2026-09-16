@@ -121,6 +121,25 @@ class JsonRpcServerTest {
   }
 
   @Test
+  void searchesSeedsAndReturnsRuinedPortalMatches() throws IOException {
+    RecordingStructureLocator locator = new RecordingStructureLocator(StructureType.RUINED_PORTAL);
+    locator.locate(42, new BlockPosition(-608, 944));
+
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":42,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"portal-1","structureType":"ruinedPortal","center":{"x":0,"z":0},"radiusBlocks":2000}],"resultLimit":1}}
+        """;
+
+    List<JsonNode> responses = serve(input, serviceUsing(locator));
+    JsonNode match = responses.get(1).at("/result/candidates/0/matches/0");
+
+    assertEquals("ruinedPortal", match.get("structureType").stringValue());
+    assertEquals(-608, match.at("/actualPosition/x").longValue());
+    assertEquals(944, match.at("/actualPosition/z").longValue());
+  }
+
+  @Test
   void requiresInitializationBeforeSeedQueries() throws IOException {
     String input =
         """
@@ -369,6 +388,30 @@ class JsonRpcServerTest {
           .stream()
           .limit(limit)
           .toList();
+    }
+  }
+
+  private static final class RecordingStructureLocator implements StructureLocator {
+
+    private final StructureType structureType;
+    private final Map<Long, BlockPosition> positions = new HashMap<>();
+
+    private RecordingStructureLocator(StructureType structureType) {
+      this.structureType = structureType;
+    }
+
+    void locate(long seed, BlockPosition position) {
+      positions.put(seed, position);
+    }
+
+    @Override
+    public StructureType structureType() {
+      return structureType;
+    }
+
+    @Override
+    public Optional<BlockPosition> findNearest(StructureSearchRequest request) {
+      return Optional.ofNullable(positions.get(request.seed()));
     }
   }
 

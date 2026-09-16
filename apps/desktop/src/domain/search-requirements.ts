@@ -1,6 +1,6 @@
-export const DEFAULT_VILLAGE_RADIUS_BLOCKS = 1_000
+export const DEFAULT_STRUCTURE_RADIUS_BLOCKS = 1_000
 
-export type StructureType = 'village'
+export type StructureType = 'village' | 'ruinedPortal'
 export type BiomeType = 'taiga'
 
 export const BIOME_SIZE_OPTIONS = [
@@ -49,15 +49,28 @@ function normalizeRequirementId(id: string): string {
 export function createVillageRequirement(
   id: string,
 ): StructureRequirement {
+  return createStructureRequirement(id, 'village')
+}
+
+export function createRuinedPortalRequirement(
+  id: string,
+): StructureRequirement {
+  return createStructureRequirement(id, 'ruinedPortal')
+}
+
+export function createStructureRequirement(
+  id: string,
+  structureType: StructureType,
+): StructureRequirement {
   return {
     kind: 'structure',
     id: normalizeRequirementId(id),
-    structureType: 'village',
+    structureType,
     center: {
       x: 0,
       z: 0,
     },
-    radiusBlocks: DEFAULT_VILLAGE_RADIUS_BLOCKS,
+    radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
   }
 }
 
