@@ -4,6 +4,7 @@ import {
   type WorkspaceView,
 } from './components/AppSidebar'
 import { ProjectWorkspace } from './components/ProjectWorkspace'
+import { ResizablePanelGroup } from './components/ResizablePanelGroup'
 import { SeedFinderWorkspace } from './components/SeedFinderWorkspace'
 import { SettingsWorkspace } from './components/SettingsWorkspace'
 import { useProjectWorkspace } from './hooks/useProjectWorkspace'
@@ -49,77 +50,89 @@ function App() {
 
   return (
     <main className="app-shell">
-      <AppSidebar
-        activeView={activeView}
-        onViewChange={setActiveView}
-      />
+      <ResizablePanelGroup
+        axis="columns"
+        label="Resize navigation"
+        initialPercentage={13}
+        minimumPrimaryPixels={72}
+        minimumSecondaryPixels={640}
+        className="app-shell-layout"
+      >
+        <AppSidebar
+          activeView={activeView}
+          onViewChange={setActiveView}
+        />
 
-      <section className="app-workspace">
-        <header className="app-workspace-header">
-          <div className="app-workspace-heading">
-            <p>{activeViewDetails.eyebrow}</p>
-            <h1>{activeViewDetails.title}</h1>
-            <span>{activeViewDetails.description}</span>
-          </div>
-
-          <div className="app-project-context">
-            <span>Active project</span>
-            <strong>{workspace.project.name}</strong>
-            <small>
-              {workspace.projectDirty
-                ? 'Unsaved changes'
-                : workspace.projectPath === null
-                  ? 'Not saved yet'
-                  : 'Saved locally'}
-            </small>
-          </div>
-        </header>
-
-        <div className={`app-view app-view--${activeView}`}>
-          {activeView === 'seed-finder' && (
-            <SeedFinderWorkspace
-              requirements={workspace.project.searchRequirements}
-              onRequirementsChange={
-                workspace.updateSearchRequirements
-              }
-              resultLimit={defaultResultLimit}
-              onResultLimitChange={setDefaultResultLimit}
-            />
-          )}
-
-          {activeView === 'project' && (
-            <div className="app-view-stack">
-              <ProjectWorkspace workspace={workspace} />
+        <section className="app-workspace">
+          <header className="app-workspace-header">
+            <div className="app-workspace-heading">
+              <p>{activeViewDetails.eyebrow}</p>
+              <h1>{activeViewDetails.title}</h1>
+              <span>{activeViewDetails.description}</span>
             </div>
-          )}
 
-          {activeView === 'world-editor' && (
-            <section
-              className="app-placeholder"
-              aria-labelledby="world-editor-placeholder-title"
+            <div className="app-project-context">
+              <span>Active project</span>
+              <strong>{workspace.project.name}</strong>
+              <small>
+                {workspace.projectDirty
+                  ? 'Unsaved changes'
+                  : workspace.projectPath === null
+                    ? 'Not saved yet'
+                    : 'Saved locally'}
+              </small>
+            </div>
+          </header>
+
+          <div className={`app-view app-view--${activeView}`}>
+            <div
+              className="app-view-surface app-view-surface--seed-finder"
+              hidden={activeView !== 'seed-finder'}
             >
-              <p className="section-label">Workspace reserved</p>
-              <h2 id="world-editor-placeholder-title">
-                World editing tools will live here
-              </h2>
-              <p>
-                The fixed application shell is ready for the future
-                editor without changing the existing seed-search flow.
-              </p>
-            </section>
-          )}
+              <SeedFinderWorkspace
+                requirements={workspace.project.searchRequirements}
+                onRequirementsChange={
+                  workspace.updateSearchRequirements
+                }
+                resultLimit={defaultResultLimit}
+                onResultLimitChange={setDefaultResultLimit}
+              />
+            </div>
 
-          {activeView === 'settings' && (
-            <SettingsWorkspace
-              resultLimit={defaultResultLimit}
-              onResultLimitChange={setDefaultResultLimit}
-              projectName={workspace.project.name}
-              projectPath={workspace.projectPath}
-              projectDirty={workspace.projectDirty}
-            />
-          )}
-        </div>
-      </section>
+            {activeView === 'project' && (
+              <div className="app-view-stack">
+                <ProjectWorkspace workspace={workspace} />
+              </div>
+            )}
+
+            {activeView === 'world-editor' && (
+              <section
+                className="app-placeholder"
+                aria-labelledby="world-editor-placeholder-title"
+              >
+                <p className="section-label">Workspace reserved</p>
+                <h2 id="world-editor-placeholder-title">
+                  World editing tools will live here
+                </h2>
+                <p>
+                  The fixed application shell is ready for the future
+                  editor without changing the existing seed-search flow.
+                </p>
+              </section>
+            )}
+
+            {activeView === 'settings' && (
+              <SettingsWorkspace
+                resultLimit={defaultResultLimit}
+                onResultLimitChange={setDefaultResultLimit}
+                projectName={workspace.project.name}
+                projectPath={workspace.projectPath}
+                projectDirty={workspace.projectDirty}
+              />
+            )}
+          </div>
+        </section>
+      </ResizablePanelGroup>
     </main>
   )
 }
