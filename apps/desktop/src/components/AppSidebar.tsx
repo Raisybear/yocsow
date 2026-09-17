@@ -21,16 +21,16 @@ interface AppSidebarProps {
 
 const navigationItems: NavigationItem[] = [
   {
-    id: 'seed-finder',
-    label: 'Seed Finder',
-    shortLabel: 'SF',
-    description: 'Filters and results',
-  },
-  {
     id: 'project',
     label: 'Project',
     shortLabel: 'PR',
     description: 'Local project files',
+  },
+  {
+    id: 'seed-finder',
+    label: 'Seed Finder',
+    shortLabel: 'SF',
+    description: 'Filters and results',
   },
   {
     id: 'world-editor',

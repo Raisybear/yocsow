@@ -44,6 +44,35 @@ describe('SearchRequirementsPanel', () => {
     expect(renderedRequirements()).toEqual([])
   })
 
+  it('toggles the seed map workspace', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+
+    const toggle = screen.getByRole('switch', {
+      name: 'Toggle Seed 2D Map',
+    })
+
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(
+      screen.queryByRole('region', { name: 'Seed 2D map' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(
+      screen.getByRole('region', { name: 'Seed 2D map' }),
+    ).toBeInTheDocument()
+
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(
+      screen.queryByRole('region', { name: 'Seed 2D map' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('adds a village requirement with default values', async () => {
     const user = userEvent.setup()
 
