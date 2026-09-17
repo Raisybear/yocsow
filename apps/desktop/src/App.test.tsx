@@ -4,6 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { getAppInfo } from './native/app-info'
 import { getEngineStatus } from './native/engine-status'
+import {
+  createRandomSearchStart,
+  searchSeedBatches,
+  stopSeedSearch,
+} from './native/seed-search'
 
 vi.mock('./native/app-info', () => ({
   getAppInfo: vi.fn(),
@@ -13,16 +18,39 @@ vi.mock('./native/engine-status', () => ({
   getEngineStatus: vi.fn(),
 }))
 
+vi.mock('./native/seed-search', async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import('./native/seed-search')>()
+
+  return {
+    ...original,
+    createRandomSearchStart: vi.fn(),
+    searchSeedBatches: vi.fn(),
+    stopSeedSearch: vi.fn(),
+  }
+})
+
 const getAppInfoMock = vi.mocked(getAppInfo)
 const getEngineStatusMock = vi.mocked(getEngineStatus)
+const createRandomSearchStartMock = vi.mocked(
+  createRandomSearchStart,
+)
+const searchSeedBatchesMock = vi.mocked(searchSeedBatches)
+const stopSeedSearchMock = vi.mocked(stopSeedSearch)
 
 describe('App', () => {
   beforeEach(() => {
     getAppInfoMock.mockReset()
     getEngineStatusMock.mockReset()
+    createRandomSearchStartMock.mockReset()
+    searchSeedBatchesMock.mockReset()
+    stopSeedSearchMock.mockReset()
 
     getAppInfoMock.mockReturnValue(new Promise(() => {}))
     getEngineStatusMock.mockReturnValue(new Promise(() => {}))
+    createRandomSearchStartMock.mockReturnValue(BigInt(0))
+    searchSeedBatchesMock.mockReturnValue(new Promise(() => {}))
+    stopSeedSearchMock.mockResolvedValue(true)
   })
 
   it('renders the fixed workspace shell with the seed finder active', () => {
@@ -41,6 +69,23 @@ describe('App', () => {
     expect(
       screen.getByRole('button', { name: /Seed Finder/i }),
     ).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('supports keyboard resizing for workspace panels', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const separator = screen.getByRole('separator', {
+      name: 'Resize navigation',
+    })
+
+    expect(separator).toHaveAttribute('aria-valuenow', '13')
+    separator.focus()
+    await user.keyboard('{ArrowRight}')
+    expect(separator).toHaveAttribute('aria-valuenow', '15')
+    await user.keyboard('{ArrowLeft}')
+    expect(separator).toHaveAttribute('aria-valuenow', '13')
   })
 
   it('switches between workspace views without duplicating panels', async () => {
@@ -111,5 +156,42 @@ describe('App', () => {
     )
 
     expect(screen.getByLabelText('Result limit')).toHaveValue('35')
+  })
+
+  it('keeps seed search results when navigating between views', async () => {
+    const user = userEvent.setup()
+
+    searchSeedBatchesMock.mockResolvedValue({
+      searchedSeedCount: '1000',
+      elapsedMilliseconds: 125,
+      reason: 'stopped',
+      candidates: [],
+    })
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add Village filter' }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Search seeds' }),
+    )
+
+    const completedSearch = await screen.findByText(
+      /Search stopped\. Checked 1,000 seeds/,
+    )
+    expect(completedSearch).toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: /Project/i }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Seed Finder/i }),
+    )
+
+    expect(
+      screen.getByText(/Search stopped\. Checked 1,000 seeds/),
+    ).toBeInTheDocument()
+    expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,4 +1,5 @@
 import type { SearchRequirement } from '../domain/search-requirements'
+import { ResizablePanelGroup } from './ResizablePanelGroup'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 import { SeedFinderPanel } from './SeedFinderPanel'
 import './SeedFinderWorkspace.css'
@@ -19,7 +20,14 @@ export function SeedFinderWorkspace({
   onResultLimitChange,
 }: SeedFinderWorkspaceProps) {
   return (
-    <div className="seed-finder-workspace">
+    <ResizablePanelGroup
+      axis="rows"
+      label="Resize seed filters and seed search"
+      initialPercentage={47}
+      minimumPrimaryPixels={240}
+      minimumSecondaryPixels={220}
+      className="seed-finder-workspace"
+    >
       <SearchRequirementsPanel
         requirements={requirements}
         onChange={onRequirementsChange}
@@ -30,6 +38,6 @@ export function SeedFinderWorkspace({
         resultLimit={resultLimit}
         onResultLimitChange={onResultLimitChange}
       />
-    </div>
+    </ResizablePanelGroup>
   )
 }

@@ -5,6 +5,36 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   background: #0e141c;
+  container-type: inline-size;
+}
+
+@container (max-width: 10rem) {
+  .app-brand {
+    justify-content: center;
+    padding-inline: 0.5rem;
+  }
+
+  .app-brand-copy,
+  .app-navigation-copy,
+  .app-sidebar-label,
+  .app-sidebar .status > span:not(.status-indicator) {
+    display: none;
+  }
+
+  .app-navigation-item {
+    display: flex;
+    justify-content: center;
+    padding-inline: 0.35rem;
+  }
+
+  .app-sidebar-footer,
+  .app-navigation {
+    padding-inline: 0.45rem;
+  }
+
+  .app-sidebar .status-list {
+    justify-items: center;
+  }
 }
 
 .app-brand {

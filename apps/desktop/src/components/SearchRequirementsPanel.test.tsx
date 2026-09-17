@@ -35,7 +35,10 @@ describe('SearchRequirementsPanel', () => {
     render(<SearchRequirementsHarness />)
 
     expect(
-      screen.getByText('No filters added yet'),
+      screen.getByText('No active biomes'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText('No active structures'),
     ).toBeInTheDocument()
 
     expect(renderedRequirements()).toEqual([])
@@ -168,7 +171,7 @@ describe('SearchRequirementsPanel', () => {
     expect(renderedRequirements()).toEqual([])
 
     expect(
-      screen.getByText('No filters added yet'),
+      screen.getByText('No active structures'),
     ).toBeInTheDocument()
   })
 
@@ -228,5 +231,37 @@ describe('SearchRequirementsPanel', () => {
         size: 'enormous',
       },
     ])
+  })
+
+  it('separates active biome and structure requirements', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add Village filter' }),
+    )
+    await user.click(screen.getByRole('tab', { name: 'Biomes' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Add Taiga filter' }),
+    )
+
+    const activeBiomes = screen.getByRole('region', {
+      name: 'Biomes',
+    })
+    const activeStructures = screen.getByRole('region', {
+      name: 'Structures',
+    })
+
+    expect(
+      within(activeBiomes).getByRole('group', {
+        name: 'Taiga requirement 2',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(activeStructures).getByRole('group', {
+        name: 'Village requirement 1',
+      }),
+    ).toBeInTheDocument()
   })
 })

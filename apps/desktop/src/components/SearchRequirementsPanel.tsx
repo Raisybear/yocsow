@@ -9,6 +9,7 @@ import {
   type StructureRequirement,
   type StructureType,
 } from '../domain/search-requirements'
+import { ResizablePanelGroup } from './ResizablePanelGroup'
 import './SearchRequirementsPanel.css'
 
 type FilterCategory = 'structures' | 'biomes'
@@ -159,6 +160,18 @@ export function SearchRequirementsPanel({
       item.category === activeCategory &&
       item.name.toLowerCase().includes(filterQuery.toLowerCase()),
   )
+  const structureRequirements = requirements.flatMap(
+    (requirement, index) =>
+      requirement.kind === 'structure'
+        ? [{ requirement, index }]
+        : [],
+  )
+  const biomeRequirements = requirements.flatMap(
+    (requirement, index) =>
+      requirement.kind === 'biome'
+        ? [{ requirement, index }]
+        : [],
+  )
 
   function addRequirement(item: FilterCatalogItem): void {
     if (item.createRequirement === undefined) {
@@ -206,7 +219,14 @@ export function SearchRequirementsPanel({
         </span>
       </header>
 
-      <div className="search-requirements-workspace">
+      <ResizablePanelGroup
+        axis="columns"
+        label="Resize filter catalog and selected filters"
+        initialPercentage={27}
+        minimumPrimaryPixels={220}
+        minimumSecondaryPixels={480}
+        className="search-requirements-workspace"
+      >
         <aside className="filter-catalog" aria-label="Filter catalog">
           <div
             className="filter-catalog-tabs"
@@ -308,38 +328,67 @@ export function SearchRequirementsPanel({
             <small>Changes are saved with the project</small>
           </header>
 
-          {requirements.length === 0 ? (
-            <div className="search-requirements-empty">
-              <strong>No filters added yet</strong>
-              <p>
-                Choose an available filter from the catalog.
-              </p>
-            </div>
-          ) : (
-            <div className="search-requirements-list">
-              {requirements.map((requirement, index) =>
-                requirement.kind === 'structure' ? (
-                  <StructureRequirementCard
-                    requirement={requirement}
-                    index={index}
-                    onChange={updateRequirement}
-                    onRemove={removeRequirement}
-                    key={requirement.id}
-                  />
-                ) : (
-                  <BiomeRequirementCard
-                    requirement={requirement}
-                    index={index}
-                    onChange={updateRequirement}
-                    onRemove={removeRequirement}
-                    key={requirement.id}
-                  />
-                ),
+          <div className="selected-filter-groups">
+            <section
+              className="selected-filter-group"
+              aria-labelledby="selected-biomes-title"
+            >
+              <header className="selected-filter-group-heading">
+                <h4 id="selected-biomes-title">Biomes</h4>
+                <span>{biomeRequirements.length}</span>
+              </header>
+
+              {biomeRequirements.length === 0 ? (
+                <div className="search-requirements-empty">
+                  <strong>No active biomes</strong>
+                  <p>Add a biome from the catalog.</p>
+                </div>
+              ) : (
+                <div className="search-requirements-list">
+                  {biomeRequirements.map(({ requirement, index }) => (
+                    <BiomeRequirementCard
+                      requirement={requirement}
+                      index={index}
+                      onChange={updateRequirement}
+                      onRemove={removeRequirement}
+                      key={requirement.id}
+                    />
+                  ))}
+                </div>
               )}
-            </div>
-          )}
+            </section>
+
+            <section
+              className="selected-filter-group"
+              aria-labelledby="selected-structures-title"
+            >
+              <header className="selected-filter-group-heading">
+                <h4 id="selected-structures-title">Structures</h4>
+                <span>{structureRequirements.length}</span>
+              </header>
+
+              {structureRequirements.length === 0 ? (
+                <div className="search-requirements-empty">
+                  <strong>No active structures</strong>
+                  <p>Add a structure from the catalog.</p>
+                </div>
+              ) : (
+                <div className="search-requirements-list">
+                  {structureRequirements.map(({ requirement, index }) => (
+                    <StructureRequirementCard
+                      requirement={requirement}
+                      index={index}
+                      onChange={updateRequirement}
+                      onRemove={removeRequirement}
+                      key={requirement.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
         </div>
-      </div>
+      </ResizablePanelGroup>
     </section>
   )
 }
@@ -360,11 +409,12 @@ function StructureRequirementCard({
   const presentation = structurePresentation(requirement.structureType)
 
   return (
-    <fieldset className="search-requirement-card">
-      <legend>{presentation.name} requirement {index + 1}</legend>
+    <fieldset
+      className="search-requirement-card"
+      aria-label={`${presentation.name} requirement ${index + 1}`}
+    >
       <RequirementCardHeading
         name={presentation.name}
-        description="Structure within a radius of the target position"
         index={index}
         onRemove={() => onRemove(requirement.id)}
       />
@@ -406,11 +456,12 @@ function BiomeRequirementCard({
   const selectedSize = BIOME_SIZE_OPTIONS[sizeIndex]
 
   return (
-    <fieldset className="search-requirement-card">
-      <legend>Taiga requirement {index + 1}</legend>
+    <fieldset
+      className="search-requirement-card"
+      aria-label={`Taiga requirement ${index + 1}`}
+    >
       <RequirementCardHeading
         name="Taiga"
-        description="Biome with the selected minimum extent around the target"
         index={index}
         onRemove={() => onRemove(requirement.id)}
       />
@@ -451,21 +502,16 @@ function BiomeRequirementCard({
 
 function RequirementCardHeading({
   name,
-  description,
   index,
   onRemove,
 }: {
   name: string
-  description: string
   index: number
   onRemove: () => void
 }) {
   return (
     <div className="search-requirement-card-heading">
-      <div>
-        <strong>{name}</strong>
-        <span>{description}</span>
-      </div>
+      <strong>{name}</strong>
       <button
         type="button"
         aria-label={`Remove ${name} requirement ${index + 1}`}
