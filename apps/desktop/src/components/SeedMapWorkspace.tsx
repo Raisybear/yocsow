@@ -1,6 +1,20 @@
+import { useMemo } from 'react'
+import { createSeedMap } from '../domain/seed-map'
+import { SeedMapCanvas } from './SeedMapCanvas'
+import { SEED_MAP_LEGEND } from './seed-map-presentation'
 import './SeedMapWorkspace.css'
 
-export function SeedMapWorkspace() {
+interface SeedMapWorkspaceProps {
+  seed: string
+  onRandomize: () => void
+}
+
+export function SeedMapWorkspace({
+  seed,
+  onRandomize,
+}: SeedMapWorkspaceProps) {
+  const model = useMemo(() => createSeedMap(seed), [seed])
+
   return (
     <section
       id="seed-map-workspace"
@@ -12,13 +26,38 @@ export function SeedMapWorkspace() {
           <span>World preview</span>
           <h3 id="seed-map-title">Seed 2D map</h3>
         </div>
-        <small>Interactive map</small>
+        <div className="seed-map-workspace-actions">
+          <span className="seed-map-value">Seed {seed}</span>
+          <button type="button" onClick={onRandomize}>
+            New seed
+          </button>
+        </div>
       </header>
 
-      <div className="seed-map-workspace-empty">
-        <div className="seed-map-workspace-grid" aria-hidden="true" />
-        <strong>Map workspace ready</strong>
-        <p>The seed renderer will be added in the next step.</p>
+      <div className="seed-map-viewport">
+        <SeedMapCanvas model={model} />
+
+        <div className="seed-map-coordinate seed-map-coordinate--north">
+          Z {model.minimumZ}
+        </div>
+        <div className="seed-map-coordinate seed-map-coordinate--south">
+          Z {model.minimumZ + model.rows * model.blocksPerCell}
+        </div>
+        <div className="seed-map-coordinate seed-map-coordinate--west">
+          X {model.minimumX}
+        </div>
+        <div className="seed-map-coordinate seed-map-coordinate--east">
+          X {model.minimumX + model.columns * model.blocksPerCell}
+        </div>
+
+        <ul className="seed-map-legend" aria-label="Map legend">
+          {SEED_MAP_LEGEND.map(([biome, color]) => (
+            <li key={biome}>
+              <span style={{ backgroundColor: color }} aria-hidden="true" />
+              {biome}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   )

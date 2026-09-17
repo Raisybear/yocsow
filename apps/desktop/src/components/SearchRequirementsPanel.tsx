@@ -9,6 +9,7 @@ import {
   type StructureRequirement,
   type StructureType,
 } from '../domain/search-requirements'
+import { createRandomSeed } from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
 import { SeedMapWorkspace } from './SeedMapWorkspace'
 import './SearchRequirementsPanel.css'
@@ -156,6 +157,7 @@ export function SearchRequirementsPanel({
     useState<FilterCategory>('structures')
   const [filterQuery, setFilterQuery] = useState('')
   const [seedMapVisible, setSeedMapVisible] = useState(false)
+  const [seedMapSeed, setSeedMapSeed] = useState(createRandomSeed)
 
   const visibleCatalogItems = filterCatalog.filter(
     (item) =>
@@ -415,7 +417,14 @@ export function SearchRequirementsPanel({
             </div>
           </div>
 
-          {seedMapVisible && <SeedMapWorkspace />}
+          {seedMapVisible && (
+            <SeedMapWorkspace
+              seed={seedMapSeed}
+              onRandomize={() => {
+                setSeedMapSeed(createRandomSeed())
+              }}
+            />
+          )}
         </div>
       </ResizablePanelGroup>
     </section>
