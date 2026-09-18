@@ -129,8 +129,23 @@
   stroke-width: 1px;
 }
 
+.seed-map-search-area {
+  fill: rgb(120 219 169 / 10%);
+  stroke: rgb(120 219 169 / 92%);
+  stroke-dasharray: 4 3;
+  stroke-width: 1px;
+  pointer-events: none;
+  shape-rendering: geometricPrecision;
+}
+
+.seed-map-search-area--biome {
+  fill: rgb(241 200 106 / 12%);
+  stroke: rgb(241 200 106 / 94%);
+}
+
 .seed-map-marker {
   pointer-events: none;
+  shape-rendering: geometricPrecision;
 }
 
 .seed-map-marker-halo {
@@ -147,6 +162,17 @@
 
 .seed-map-marker--biome .seed-map-marker-symbol {
   fill: #f1c86a;
+}
+
+.seed-map-search-area-note {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  padding: 0.12rem 0.28rem;
+  color: #c2cbd8;
+  background: rgb(7 12 18 / 72%);
+  font-size: 0.56rem;
+  pointer-events: none;
 }
 
 .seed-map-coordinate {

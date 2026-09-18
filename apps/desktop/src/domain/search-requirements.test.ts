@@ -5,6 +5,7 @@ import {
   createRuinedPortalRequirement,
   createVillageRequirement,
   DEFAULT_STRUCTURE_RADIUS_BLOCKS,
+  searchRequirementRadiusBlocks,
   type SearchRequirement,
 } from './search-requirements'
 
@@ -70,5 +71,16 @@ describe('search requirements', () => {
     expect(biomeSizeRadiusBlocks('big')).toBe(64)
     expect(biomeSizeRadiusBlocks('gigantic')).toBe(128)
     expect(biomeSizeRadiusBlocks('enormous')).toBe(256)
+  })
+
+  it('resolves the search radius for every requirement kind', () => {
+    const village = createVillageRequirement('village-1')
+    const taiga = createBiomeRequirement('taiga-1', 'taiga')
+
+    village.radiusBlocks = 320
+    taiga.size = 'gigantic'
+
+    expect(searchRequirementRadiusBlocks(village)).toBe(320)
+    expect(searchRequirementRadiusBlocks(taiga)).toBe(128)
   })
 })

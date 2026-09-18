@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   blockPositionToMapPoint,
+  blockRadiusToMapUnits,
   createRandomSeed,
   createSeedMap,
   mapRatiosToBlockPosition,
@@ -73,5 +74,14 @@ describe('seed map', () => {
       x: 36,
       y: 8,
     })
+  })
+
+  it('converts block radii into safe map units', () => {
+    const model = createSeedMap('42')
+
+    expect(blockRadiusToMapUnits(model, 1_000)).toBe(15.625)
+    expect(blockRadiusToMapUnits(model, 128)).toBe(2)
+    expect(blockRadiusToMapUnits(model, -20)).toBe(0)
+    expect(blockRadiusToMapUnits(model, Number.NaN)).toBe(0)
   })
 })

@@ -123,6 +123,17 @@ export function blockPositionToMapPoint(
   }
 }
 
+export function blockRadiusToMapUnits(
+  model: SeedMapModel,
+  radiusBlocks: number,
+): number {
+  if (!Number.isFinite(radiusBlocks)) {
+    return 0
+  }
+
+  return Math.max(0, radiusBlocks) / model.blocksPerCell
+}
+
 function samplePreviewBiome(
   seed: bigint,
   column: number,

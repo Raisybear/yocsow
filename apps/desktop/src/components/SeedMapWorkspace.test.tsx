@@ -15,6 +15,13 @@ function SeedMapHarness() {
       center: { x: 64, z: -128 },
       radiusBlocks: 1000,
     },
+    {
+      id: 'taiga-1',
+      kind: 'biome',
+      biomeType: 'taiga',
+      center: { x: -256, z: 128 },
+      size: 'gigantic',
+    },
   ]
 
   return (
@@ -33,7 +40,7 @@ describe('SeedMapWorkspace', () => {
   it('renders a seed map and replaces its seed on request', async () => {
     const user = userEvent.setup()
 
-    render(<SeedMapHarness />)
+    const { container } = render(<SeedMapHarness />)
 
     expect(
       screen.getByRole('img', {
@@ -45,9 +52,26 @@ describe('SeedMapWorkspace', () => {
     ).toBeInTheDocument()
     expect(
       screen.getByRole('img', {
-        name: 'Village filter at X 64, Z -128',
+        name: 'Village filter at X 64, Z -128 with 1000 block search radius',
       }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', {
+        name: 'Taiga filter at X -256, Z 128 with 128 block search radius',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Rings show search radius')).toBeInTheDocument()
+
+    expect(
+      container.querySelector(
+        '.seed-map-search-area[data-requirement-id="village-1"]',
+      ),
+    ).toHaveAttribute('r', '15.625')
+    expect(
+      container.querySelector(
+        '.seed-map-search-area[data-requirement-id="taiga-1"]',
+      ),
+    ).toHaveAttribute('r', '2')
 
     await user.click(
       screen.getByRole('button', { name: 'New seed' }),

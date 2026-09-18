@@ -98,3 +98,11 @@ export function biomeSizeRadiusBlocks(size: BiomeSize): number {
 
   return option.radiusBlocks
 }
+
+export function searchRequirementRadiusBlocks(
+  requirement: SearchRequirement,
+): number {
+  return requirement.kind === 'structure'
+    ? requirement.radiusBlocks
+    : biomeSizeRadiusBlocks(requirement.size)
+}

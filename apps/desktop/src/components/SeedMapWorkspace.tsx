@@ -125,6 +125,10 @@ export function SeedMapWorkspace({
           Drop filter at this position
         </div>
 
+        <div className="seed-map-search-area-note">
+          Rings show search radius
+        </div>
+
         <div className="seed-map-coordinate seed-map-coordinate--north">
           Z {model.minimumZ}
         </div>

@@ -103,7 +103,7 @@ describe('SearchRequirementsPanel', () => {
     const user = userEvent.setup()
     const dataTransfer = createDataTransfer()
 
-    render(<SearchRequirementsHarness />)
+    const { container } = render(<SearchRequirementsHarness />)
     await user.click(
       screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
     )
@@ -148,7 +148,7 @@ describe('SearchRequirementsPanel', () => {
     ])
     expect(
       screen.getByRole('img', {
-        name: 'Village filter at X 768, Z -512',
+        name: 'Village filter at X 768, Z -512 with 1000 block search radius',
       }),
     ).toBeInTheDocument()
 
@@ -162,9 +162,23 @@ describe('SearchRequirementsPanel', () => {
 
     expect(
       screen.getByRole('img', {
-        name: 'Village filter at X 256, Z -512',
+        name: 'Village filter at X 256, Z -512 with 1000 block search radius',
       }),
     ).toBeInTheDocument()
+
+    const radius = within(requirement).getByLabelText('Radius in blocks')
+
+    await user.clear(radius)
+    await user.type(radius, '320')
+
+    expect(
+      screen.getByRole('img', {
+        name: 'Village filter at X 256, Z -512 with 320 block search radius',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('.seed-map-search-area--structure'),
+    ).toHaveAttribute('r', '5')
   })
 
   it('adds a village requirement with default values', async () => {
@@ -324,7 +338,7 @@ describe('SearchRequirementsPanel', () => {
   it('adds and configures a taiga biome requirement', async () => {
     const user = userEvent.setup()
 
-    render(<SearchRequirementsHarness />)
+    const { container } = render(<SearchRequirementsHarness />)
     await user.click(screen.getByRole('tab', { name: 'Biomes' }))
     await user.click(
       screen.getByRole('button', { name: 'Add Taiga filter' }),
@@ -354,6 +368,19 @@ describe('SearchRequirementsPanel', () => {
         size: 'enormous',
       },
     ])
+
+    await user.click(
+      screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
+    )
+
+    expect(
+      screen.getByRole('img', {
+        name: 'Taiga filter at X 240, Z -80 with 256 block search radius',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      container.querySelector('.seed-map-search-area--biome'),
+    ).toHaveAttribute('r', '4')
   })
 
   it('separates active biome and structure requirements', async () => {
