@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SearchRequirement } from '../domain/search-requirements'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 
@@ -28,6 +28,32 @@ function renderedRequirements(): SearchRequirement[] {
   return JSON.parse(
     screen.getByTestId('requirements-state').textContent ?? '[]',
   ) as SearchRequirement[]
+}
+
+function createDataTransfer(): DataTransfer {
+  const values = new Map<string, string>()
+
+  return {
+    dropEffect: 'none',
+    effectAllowed: 'uninitialized',
+    files: [] as unknown as FileList,
+    items: [] as unknown as DataTransferItemList,
+    get types() {
+      return [...values.keys()]
+    },
+    clearData: (format?: string) => {
+      if (format === undefined) {
+        values.clear()
+      } else {
+        values.delete(format)
+      }
+    },
+    getData: (format: string) => values.get(format) ?? '',
+    setData: (format: string, value: string) => {
+      values.set(format, value)
+    },
+    setDragImage: () => {},
+  }
 }
 
 describe('SearchRequirementsPanel', () => {
@@ -71,6 +97,74 @@ describe('SearchRequirementsPanel', () => {
     expect(
       screen.queryByRole('region', { name: 'Seed 2D map' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('drops a catalog filter onto map coordinates', async () => {
+    const user = userEvent.setup()
+    const dataTransfer = createDataTransfer()
+
+    render(<SearchRequirementsHarness />)
+    await user.click(
+      screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
+    )
+
+    const catalogItem = screen.getByRole('button', {
+      name: 'Add Village filter',
+    })
+    const dropArea = screen.getByLabelText('Seed map drop area')
+
+    vi.spyOn(dropArea, 'getBoundingClientRect').mockReturnValue({
+      x: 100,
+      y: 50,
+      left: 100,
+      top: 50,
+      right: 580,
+      bottom: 370,
+      width: 480,
+      height: 320,
+      toJSON: () => ({}),
+    })
+
+    fireEvent.dragStart(catalogItem, { dataTransfer })
+    fireEvent.dragEnter(dropArea, { dataTransfer })
+    fireEvent.dragOver(dropArea, { dataTransfer })
+    const dropEvent = new Event('drop', {
+      bubbles: true,
+      cancelable: true,
+    })
+    Object.defineProperties(dropEvent, {
+      dataTransfer: { value: dataTransfer },
+      clientX: { value: 460 },
+      clientY: { value: 130 },
+    })
+    fireEvent(dropArea, dropEvent)
+
+    expect(renderedRequirements()).toMatchObject([
+      {
+        kind: 'structure',
+        structureType: 'village',
+        center: { x: 768, z: -512 },
+      },
+    ])
+    expect(
+      screen.getByRole('img', {
+        name: 'Village filter at X 768, Z -512',
+      }),
+    ).toBeInTheDocument()
+
+    const requirement = screen.getByRole('group', {
+      name: 'Village requirement 1',
+    })
+    const xCoordinate = within(requirement).getByLabelText('X coordinate')
+
+    await user.clear(xCoordinate)
+    await user.type(xCoordinate, '256')
+
+    expect(
+      screen.getByRole('img', {
+        name: 'Village filter at X 256, Z -512',
+      }),
+    ).toBeInTheDocument()
   })
 
   it('adds a village requirement with default values', async () => {

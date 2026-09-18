@@ -30,6 +30,16 @@ export interface SeedMapModel {
   cells: SeedMapCell[]
 }
 
+export interface SeedMapPosition {
+  x: number
+  z: number
+}
+
+export interface SeedMapPoint {
+  x: number
+  y: number
+}
+
 type RandomValueFiller = (values: Uint32Array<ArrayBuffer>) => void
 
 const UINT32_RANGE = 0x1_0000_0000
@@ -78,6 +88,38 @@ export function createSeedMap(seed: string): SeedMapModel {
     minimumX,
     minimumZ,
     cells,
+  }
+}
+
+export function mapRatiosToBlockPosition(
+  model: SeedMapModel,
+  horizontalRatio: number,
+  verticalRatio: number,
+): SeedMapPosition {
+  const clampedHorizontalRatio = clamp(horizontalRatio, 0, 1)
+  const clampedVerticalRatio = clamp(verticalRatio, 0, 1)
+
+  return {
+    x: Math.round(
+      model.minimumX +
+        clampedHorizontalRatio *
+          model.columns *
+          model.blocksPerCell,
+    ),
+    z: Math.round(
+      model.minimumZ +
+        clampedVerticalRatio * model.rows * model.blocksPerCell,
+    ),
+  }
+}
+
+export function blockPositionToMapPoint(
+  model: SeedMapModel,
+  position: SeedMapPosition,
+): SeedMapPoint {
+  return {
+    x: (position.x - model.minimumX) / model.blocksPerCell,
+    y: (position.z - model.minimumZ) / model.blocksPerCell,
   }
 }
 
@@ -180,4 +222,8 @@ function smoothStep(value: number): number {
 
 function interpolate(start: number, end: number, amount: number): number {
   return start + (end - start) * amount
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum)
 }

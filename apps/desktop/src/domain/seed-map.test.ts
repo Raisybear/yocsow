@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  blockPositionToMapPoint,
   createRandomSeed,
   createSeedMap,
+  mapRatiosToBlockPosition,
   SEED_MAP_BIOMES,
   SEED_MAP_BLOCKS_PER_CELL,
   SEED_MAP_COLUMNS,
@@ -50,5 +52,26 @@ describe('seed map', () => {
         values[1] = 0xffffffff
       }),
     ).toBe('-1')
+  })
+
+  it('maps between viewport ratios and block coordinates', () => {
+    const model = createSeedMap('42')
+
+    expect(mapRatiosToBlockPosition(model, 0.5, 0.5)).toEqual({
+      x: 0,
+      z: 0,
+    })
+    expect(mapRatiosToBlockPosition(model, 0.75, 0.25)).toEqual({
+      x: 768,
+      z: -512,
+    })
+    expect(mapRatiosToBlockPosition(model, -1, 2)).toEqual({
+      x: -1536,
+      z: 1024,
+    })
+    expect(blockPositionToMapPoint(model, { x: 768, z: -512 })).toEqual({
+      x: 36,
+      y: 8,
+    })
   })
 })

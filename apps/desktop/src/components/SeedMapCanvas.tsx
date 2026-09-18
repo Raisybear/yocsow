@@ -1,13 +1,17 @@
 import { memo } from 'react'
 import type { SeedMapModel } from '../domain/seed-map'
+import { blockPositionToMapPoint } from '../domain/seed-map'
+import type { SearchRequirement } from '../domain/search-requirements'
 import { SEED_MAP_BIOME_COLORS } from './seed-map-presentation'
 
 interface SeedMapCanvasProps {
   model: SeedMapModel
+  requirements: SearchRequirement[]
 }
 
 export const SeedMapCanvas = memo(function SeedMapCanvas({
   model,
+  requirements,
 }: SeedMapCanvasProps) {
   return (
     <svg
@@ -46,6 +50,43 @@ export const SeedMapCanvas = memo(function SeedMapCanvas({
         y2={model.rows / 2}
         vectorEffect="non-scaling-stroke"
       />
+
+      {requirements.map((requirement) => {
+        const point = blockPositionToMapPoint(model, requirement.center)
+        const label = requirementMarkerLabel(requirement)
+
+        return (
+          <g
+            className={`seed-map-marker seed-map-marker--${requirement.kind}`}
+            transform={`translate(${point.x} ${point.y})`}
+            role="img"
+            aria-label={label}
+            key={requirement.id}
+          >
+            <title>{label}</title>
+            <circle className="seed-map-marker-halo" r={1.25} />
+            {requirement.kind === 'biome' ? (
+              <circle className="seed-map-marker-symbol" r={0.68} />
+            ) : (
+              <path
+                className="seed-map-marker-symbol"
+                d="M 0 -0.82 L 0.82 0 L 0 0.82 L -0.82 0 Z"
+              />
+            )}
+          </g>
+        )
+      })}
     </svg>
   )
 })
+
+function requirementMarkerLabel(requirement: SearchRequirement): string {
+  const name =
+    requirement.kind === 'biome'
+      ? 'Taiga'
+      : requirement.structureType === 'village'
+        ? 'Village'
+        : 'Ruined Portal'
+
+  return `${name} filter at X ${requirement.center.x}, Z ${requirement.center.z}`
+}

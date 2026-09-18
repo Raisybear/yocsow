@@ -77,6 +77,43 @@
   background: #091018;
 }
 
+.seed-map-viewport::after {
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  content: '';
+  pointer-events: none;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.seed-map-viewport--drop-active::after {
+  border-color: #78dba9;
+  background: rgb(84 214 146 / 10%);
+}
+
+.seed-map-drop-message {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #78dba9;
+  opacity: 0;
+  color: #effff6;
+  background: rgb(7 18 13 / 88%);
+  font-size: 0.68rem;
+  font-weight: 700;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity 120ms ease;
+}
+
+.seed-map-viewport--drop-active .seed-map-drop-message {
+  opacity: 1;
+}
+
 .seed-map-canvas {
   position: absolute;
   inset: 0;
@@ -90,6 +127,26 @@
   stroke: rgb(244 247 251 / 42%);
   stroke-dasharray: 3 3;
   stroke-width: 1px;
+}
+
+.seed-map-marker {
+  pointer-events: none;
+}
+
+.seed-map-marker-halo {
+  fill: rgb(6 12 17 / 72%);
+  stroke: rgb(244 247 251 / 72%);
+  stroke-width: 0.12;
+}
+
+.seed-map-marker-symbol {
+  fill: #78dba9;
+  stroke: #08110d;
+  stroke-width: 0.1;
+}
+
+.seed-map-marker--biome .seed-map-marker-symbol {
+  fill: #f1c86a;
 }
 
 .seed-map-coordinate {

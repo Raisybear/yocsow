@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type DragEvent } from 'react'
 import {
   BIOME_SIZE_OPTIONS,
   createBiomeRequirement,
@@ -12,6 +12,7 @@ import {
 import { createRandomSeed } from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
 import { SeedMapWorkspace } from './SeedMapWorkspace'
+import { writeDraggedFilterId } from './seed-map-drag'
 import './SearchRequirementsPanel.css'
 
 type FilterCategory = 'structures' | 'biomes'
@@ -177,15 +178,45 @@ export function SearchRequirementsPanel({
         : [],
   )
 
-  function addRequirement(item: FilterCatalogItem): void {
+  function addRequirement(
+    item: FilterCatalogItem,
+    center?: { x: number; z: number },
+  ): void {
     if (item.createRequirement === undefined) {
       return
     }
 
+    const requirement = item.createRequirement(createRequirementId())
+
     onChange([
       ...requirements,
-      item.createRequirement(createRequirementId()),
+      center === undefined ? requirement : { ...requirement, center },
     ])
+  }
+
+  function startFilterDrag(
+    event: DragEvent<HTMLButtonElement>,
+    item: FilterCatalogItem,
+  ): void {
+    if (item.createRequirement === undefined) {
+      event.preventDefault()
+      return
+    }
+
+    writeDraggedFilterId(event.dataTransfer, item.id)
+  }
+
+  function addDroppedFilter(
+    filterId: string,
+    center: { x: number; z: number },
+  ): void {
+    const item = filterCatalog.find(
+      (candidate) => candidate.id === filterId,
+    )
+
+    if (item?.createRequirement !== undefined) {
+      addRequirement(item, center)
+    }
   }
 
   function updateRequirement(
@@ -311,6 +342,7 @@ export function SearchRequirementsPanel({
                   className="filter-catalog-item"
                   type="button"
                   disabled={!available}
+                  draggable={available}
                   aria-label={
                     available
                       ? `Add ${item.name} filter`
@@ -319,13 +351,18 @@ export function SearchRequirementsPanel({
                   onClick={() => {
                     addRequirement(item)
                   }}
+                  onDragStart={(event) => {
+                    startFilterDrag(event, item)
+                  }}
                   key={item.id}
                 >
                   <strong>{item.name}</strong>
                   <span>{item.description}</span>
                   <small>
                     {available
-                      ? 'Add filter'
+                      ? seedMapVisible
+                        ? 'Add or drag to map'
+                        : 'Add filter'
                       : 'Engine support required'}
                   </small>
                 </button>
@@ -420,9 +457,11 @@ export function SearchRequirementsPanel({
           {seedMapVisible && (
             <SeedMapWorkspace
               seed={seedMapSeed}
+              requirements={requirements}
               onRandomize={() => {
                 setSeedMapSeed(createRandomSeed())
               }}
+              onFilterDrop={addDroppedFilter}
             />
           )}
         </div>
