@@ -1,4 +1,8 @@
-import { memo } from 'react'
+import {
+  memo,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react'
 import {
   blockPositionToMapPoint,
   blockRadiusToMapUnits,
@@ -14,11 +18,23 @@ import { SEED_MAP_BIOME_COLORS } from './seed-map-presentation'
 interface SeedMapCanvasProps {
   model: SeedMapModel
   requirements: SearchRequirement[]
+  draggingRequirementId?: string
+  onMarkerPointerDown: (
+    requirementId: string,
+    event: PointerEvent<SVGGElement>,
+  ) => void
+  onMarkerKeyDown: (
+    requirementId: string,
+    event: KeyboardEvent<SVGGElement>,
+  ) => void
 }
 
 export const SeedMapCanvas = memo(function SeedMapCanvas({
   model,
   requirements,
+  draggingRequirementId,
+  onMarkerPointerDown,
+  onMarkerKeyDown,
 }: SeedMapCanvasProps) {
   const overlays = requirements.map((requirement) =>
     createRequirementOverlay(model, requirement),
@@ -29,7 +45,7 @@ export const SeedMapCanvas = memo(function SeedMapCanvas({
       className="seed-map-canvas"
       viewBox={`0 0 ${model.columns} ${model.rows}`}
       preserveAspectRatio="none"
-      role="img"
+      role="group"
       aria-label={`Terrain preview for seed ${model.seed}`}
     >
       <title>Terrain preview for seed {model.seed}</title>
@@ -80,14 +96,26 @@ export const SeedMapCanvas = memo(function SeedMapCanvas({
 
         return (
           <g
-            className={`seed-map-marker seed-map-marker--${requirement.kind}`}
+            className={
+              draggingRequirementId === requirement.id
+                ? `seed-map-marker seed-map-marker--${requirement.kind} seed-map-marker--dragging`
+                : `seed-map-marker seed-map-marker--${requirement.kind}`
+            }
             transform={`translate(${point.x} ${point.y})`}
             data-requirement-id={requirement.id}
-            role="img"
-            aria-label={label}
+            role="button"
+            tabIndex={0}
+            aria-label={`Move ${label}`}
+            onPointerDown={(event) => {
+              onMarkerPointerDown(requirement.id, event)
+            }}
+            onKeyDown={(event) => {
+              onMarkerKeyDown(requirement.id, event)
+            }}
             key={requirement.id}
           >
-            <title>{label}</title>
+            <title>Drag to move {label}</title>
+            <circle className="seed-map-marker-hit-target" r={1.15} />
             <circle
               className="seed-map-marker-halo"
               r={requirement.kind === 'biome' ? 0.2 : 0.46}

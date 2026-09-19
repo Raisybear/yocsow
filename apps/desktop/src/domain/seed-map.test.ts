@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   blockPositionToMapPoint,
   blockRadiusToMapUnits,
+  clampBlockPositionToMap,
   createRandomSeed,
   createSeedMap,
   mapRatiosToBlockPosition,
@@ -83,5 +84,16 @@ describe('seed map', () => {
     expect(blockRadiusToMapUnits(model, 128)).toBe(2)
     expect(blockRadiusToMapUnits(model, -20)).toBe(0)
     expect(blockRadiusToMapUnits(model, Number.NaN)).toBe(0)
+  })
+
+  it('keeps moved markers inside the visible map', () => {
+    const model = createSeedMap('42')
+
+    expect(
+      clampBlockPositionToMap(model, { x: -2_000, z: 2_000 }),
+    ).toEqual({ x: -1_536, z: 1_024 })
+    expect(
+      clampBlockPositionToMap(model, { x: 123.6, z: -456.4 }),
+    ).toEqual({ x: 124, z: -456 })
   })
 })

@@ -7,7 +7,7 @@ import { SeedMapWorkspace } from './SeedMapWorkspace'
 
 function SeedMapHarness() {
   const [seed, setSeed] = useState('42')
-  const requirements: SearchRequirement[] = [
+  const [requirements, setRequirements] = useState<SearchRequirement[]>([
     {
       id: 'village-1',
       kind: 'structure',
@@ -22,7 +22,7 @@ function SeedMapHarness() {
       center: { x: -256, z: 128 },
       size: 'gigantic',
     },
-  ]
+  ])
 
   return (
     <SeedMapWorkspace
@@ -32,6 +32,15 @@ function SeedMapHarness() {
         setSeed('99')
       }}
       onFilterDrop={() => {}}
+      onRequirementMove={(requirementId, center) => {
+        setRequirements((currentRequirements) =>
+          currentRequirements.map((requirement) =>
+            requirement.id === requirementId
+              ? { ...requirement, center }
+              : requirement,
+          ),
+        )
+      }}
     />
   )
 }
@@ -43,7 +52,7 @@ describe('SeedMapWorkspace', () => {
     const { container } = render(<SeedMapHarness />)
 
     expect(
-      screen.getByRole('img', {
+      screen.getByRole('group', {
         name: 'Terrain preview for seed 42',
       }),
     ).toBeInTheDocument()
@@ -51,16 +60,20 @@ describe('SeedMapWorkspace', () => {
       screen.getByRole('list', { name: 'Map legend' }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('img', {
-        name: 'Village filter at X 64, Z -128 with 1000 block search radius',
+      screen.getByRole('button', {
+        name: 'Move Village filter at X 64, Z -128 with 1000 block search radius',
       }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('img', {
-        name: 'Taiga filter at X -256, Z 128 with 128 block search radius',
+      screen.getByRole('button', {
+        name: 'Move Taiga filter at X -256, Z 128 with 128 block search radius',
       }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Rings show search radius')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Drag markers · rings show radius',
+      ),
+    ).toBeInTheDocument()
 
     expect(
       container.querySelector(
@@ -73,12 +86,24 @@ describe('SeedMapWorkspace', () => {
       ),
     ).toHaveAttribute('r', '2')
 
+    const villageMarker = screen.getByRole('button', {
+      name: 'Move Village filter at X 64, Z -128 with 1000 block search radius',
+    })
+    villageMarker.focus()
+    await user.keyboard('{ArrowRight}{ArrowDown}')
+
+    expect(
+      screen.getByRole('button', {
+        name: 'Move Village filter at X 80, Z -112 with 1000 block search radius',
+      }),
+    ).toBeInTheDocument()
+
     await user.click(
       screen.getByRole('button', { name: 'New seed' }),
     )
 
     expect(
-      screen.getByRole('img', {
+      screen.getByRole('group', {
         name: 'Terrain preview for seed 99',
       }),
     ).toBeInTheDocument()

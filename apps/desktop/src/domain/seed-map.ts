@@ -123,6 +123,20 @@ export function blockPositionToMapPoint(
   }
 }
 
+export function clampBlockPositionToMap(
+  model: SeedMapModel,
+  position: SeedMapPosition,
+): SeedMapPosition {
+  const maximumX =
+    model.minimumX + model.columns * model.blocksPerCell
+  const maximumZ = model.minimumZ + model.rows * model.blocksPerCell
+
+  return {
+    x: Math.round(clamp(position.x, model.minimumX, maximumX)),
+    z: Math.round(clamp(position.z, model.minimumZ, maximumZ)),
+  }
+}
+
 export function blockRadiusToMapUnits(
   model: SeedMapModel,
   radiusBlocks: number,

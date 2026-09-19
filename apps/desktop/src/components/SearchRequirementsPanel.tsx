@@ -231,6 +231,19 @@ export function SearchRequirementsPanel({
     )
   }
 
+  function moveRequirement(
+    requirementId: string,
+    center: { x: number; z: number },
+  ): void {
+    const requirement = requirements.find(
+      (candidate) => candidate.id === requirementId,
+    )
+
+    if (requirement !== undefined) {
+      updateRequirement({ ...requirement, center })
+    }
+  }
+
   function removeRequirement(id: string): void {
     onChange(
       requirements.filter((requirement) => requirement.id !== id),
@@ -462,6 +475,7 @@ export function SearchRequirementsPanel({
                 setSeedMapSeed(createRandomSeed())
               }}
               onFilterDrop={addDroppedFilter}
+              onRequirementMove={moveRequirement}
             />
           )}
         </div>

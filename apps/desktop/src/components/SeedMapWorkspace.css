@@ -75,6 +75,7 @@
   min-height: 0;
   overflow: hidden;
   background: #091018;
+  touch-action: none;
 }
 
 .seed-map-viewport::after {
@@ -144,8 +145,33 @@
 }
 
 .seed-map-marker {
-  pointer-events: none;
+  outline: none;
+  cursor: grab;
+  pointer-events: all;
   shape-rendering: geometricPrecision;
+  touch-action: none;
+}
+
+.seed-map-marker-hit-target {
+  fill: transparent;
+  stroke: transparent;
+  pointer-events: all;
+}
+
+.seed-map-marker:hover .seed-map-marker-halo,
+.seed-map-marker:focus-visible .seed-map-marker-halo,
+.seed-map-marker--dragging .seed-map-marker-halo {
+  stroke: #ffffff;
+  stroke-width: 0.2;
+}
+
+.seed-map-marker--dragging,
+.seed-map-viewport--moving {
+  cursor: grabbing;
+}
+
+.seed-map-viewport--moving {
+  user-select: none;
 }
 
 .seed-map-marker-halo {
