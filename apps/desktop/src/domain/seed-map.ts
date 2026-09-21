@@ -35,6 +35,11 @@ export interface SeedMapPosition {
   z: number
 }
 
+export interface SeedMapSettings {
+  visible: boolean
+  seed: string
+}
+
 export interface SeedMapPoint {
   x: number
   y: number

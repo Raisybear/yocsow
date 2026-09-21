@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createRandomSeed } from '../domain/seed-map'
 import {
   openLocalProject,
   PROJECT_FORMAT_VERSION,
@@ -32,6 +33,7 @@ export interface ProjectWorkspaceController {
   updateSearchRequirements: (
     requirements: ProjectDocument['searchRequirements'],
   ) => void
+  updateSeedMap: (seedMap: ProjectDocument['seedMap']) => void
 }
 
 function createProject(): ProjectDocument {
@@ -39,6 +41,10 @@ function createProject(): ProjectDocument {
     formatVersion: PROJECT_FORMAT_VERSION,
     name: 'Untitled project',
     searchRequirements: [],
+    seedMap: {
+      visible: false,
+      seed: createRandomSeed(),
+    },
   }
 }
 
@@ -197,6 +203,15 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     markProjectChanged()
   }
 
+  function updateSeedMap(seedMap: ProjectDocument['seedMap']): void {
+    setProject((currentProject) => ({
+      ...currentProject,
+      seedMap,
+    }))
+
+    markProjectChanged()
+  }
+
   return {
     project,
     projectPath,
@@ -209,5 +224,6 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     saveProjectAs,
     updateProjectName,
     updateSearchRequirements,
+    updateSeedMap,
   }
 }

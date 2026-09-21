@@ -204,4 +204,29 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps the project seed map when navigating between views', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const toggle = screen.getByRole('switch', {
+      name: 'Toggle Seed 2D Map',
+    })
+    await user.click(toggle)
+
+    const renderedSeed = screen.getByText(/^Seed -?\d+$/).textContent
+
+    await user.click(
+      screen.getByRole('button', { name: /Project/i }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Seed Finder/i }),
+    )
+
+    expect(
+      screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText(renderedSeed ?? '')).toBeInTheDocument()
+  })
 })

@@ -3,22 +3,32 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { SearchRequirement } from '../domain/search-requirements'
+import type { SeedMapSettings } from '../domain/seed-map'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 
 function SearchRequirementsHarness() {
   const [requirements, setRequirements] = useState<
     SearchRequirement[]
   >([])
+  const [seedMap, setSeedMap] = useState<SeedMapSettings>({
+    visible: false,
+    seed: '42',
+  })
 
   return (
     <>
       <SearchRequirementsPanel
         requirements={requirements}
         onChange={setRequirements}
+        seedMap={seedMap}
+        onSeedMapChange={setSeedMap}
       />
 
       <output data-testid="requirements-state">
         {JSON.stringify(requirements)}
+      </output>
+      <output data-testid="seed-map-state">
+        {JSON.stringify(seedMap)}
       </output>
     </>
   )
@@ -114,6 +124,9 @@ describe('SearchRequirementsPanel', () => {
     expect(
       screen.getByRole('region', { name: 'Seed 2D map' }),
     ).toBeInTheDocument()
+    expect(screen.getByTestId('seed-map-state')).toHaveTextContent(
+      '{"visible":true,"seed":"42"}',
+    )
 
     await user.click(toggle)
 

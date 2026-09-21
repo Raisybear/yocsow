@@ -1,4 +1,5 @@
 import type { SearchRequirement } from '../domain/search-requirements'
+import type { SeedMapSettings } from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 import { SeedFinderPanel } from './SeedFinderPanel'
@@ -9,6 +10,8 @@ interface SeedFinderWorkspaceProps {
   onRequirementsChange: (
     requirements: SearchRequirement[],
   ) => void
+  seedMap: SeedMapSettings
+  onSeedMapChange: (seedMap: SeedMapSettings) => void
   resultLimit: string
   onResultLimitChange: (resultLimit: string) => void
 }
@@ -16,6 +19,8 @@ interface SeedFinderWorkspaceProps {
 export function SeedFinderWorkspace({
   requirements,
   onRequirementsChange,
+  seedMap,
+  onSeedMapChange,
   resultLimit,
   onResultLimitChange,
 }: SeedFinderWorkspaceProps) {
@@ -31,6 +36,8 @@ export function SeedFinderWorkspace({
       <SearchRequirementsPanel
         requirements={requirements}
         onChange={onRequirementsChange}
+        seedMap={seedMap}
+        onSeedMapChange={onSeedMapChange}
       />
 
       <SeedFinderPanel

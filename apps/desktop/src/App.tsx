@@ -94,6 +94,8 @@ function App() {
                 onRequirementsChange={
                   workspace.updateSearchRequirements
                 }
+                seedMap={workspace.project.seedMap}
+                onSeedMapChange={workspace.updateSeedMap}
                 resultLimit={defaultResultLimit}
                 onResultLimitChange={setDefaultResultLimit}
               />

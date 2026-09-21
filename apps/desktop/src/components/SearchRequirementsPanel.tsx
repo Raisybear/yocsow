@@ -9,7 +9,10 @@ import {
   type StructureRequirement,
   type StructureType,
 } from '../domain/search-requirements'
-import { createRandomSeed } from '../domain/seed-map'
+import {
+  createRandomSeed,
+  type SeedMapSettings,
+} from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
 import { SeedMapWorkspace } from './SeedMapWorkspace'
 import { writeDraggedFilterId } from './seed-map-drag'
@@ -20,6 +23,8 @@ type FilterCategory = 'structures' | 'biomes'
 interface SearchRequirementsPanelProps {
   requirements: SearchRequirement[]
   onChange: (requirements: SearchRequirement[]) => void
+  seedMap: SeedMapSettings
+  onSeedMapChange: (seedMap: SeedMapSettings) => void
 }
 
 interface IntegerInputProps {
@@ -153,12 +158,14 @@ function createRequirementId(): string {
 export function SearchRequirementsPanel({
   requirements,
   onChange,
+  seedMap,
+  onSeedMapChange,
 }: SearchRequirementsPanelProps) {
   const [activeCategory, setActiveCategory] =
     useState<FilterCategory>('structures')
   const [filterQuery, setFilterQuery] = useState('')
-  const [seedMapVisible, setSeedMapVisible] = useState(false)
-  const [seedMapSeed, setSeedMapSeed] = useState(createRandomSeed)
+  const seedMapVisible = seedMap.visible
+  const seedMapSeed = seedMap.seed
 
   const visibleCatalogItems = filterCatalog.filter(
     (item) =>
@@ -270,7 +277,10 @@ export function SearchRequirementsPanel({
             aria-checked={seedMapVisible}
             aria-controls="seed-map-workspace"
             onClick={() => {
-              setSeedMapVisible((visible) => !visible)
+              onSeedMapChange({
+                ...seedMap,
+                visible: !seedMapVisible,
+              })
             }}
           >
             <span>Toggle Seed 2D Map</span>
@@ -472,7 +482,10 @@ export function SearchRequirementsPanel({
               seed={seedMapSeed}
               requirements={requirements}
               onRandomize={() => {
-                setSeedMapSeed(createRandomSeed())
+                onSeedMapChange({
+                  ...seedMap,
+                  seed: createRandomSeed(),
+                })
               }}
               onFilterDrop={addDroppedFilter}
               onRequirementMove={moveRequirement}

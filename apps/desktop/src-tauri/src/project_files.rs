@@ -9,7 +9,8 @@ use std::path::Path;
 const VERSION_ONE_PROJECT_FORMAT: u32 = 1;
 const VERSION_TWO_PROJECT_FORMAT: u32 = 2;
 const VERSION_THREE_PROJECT_FORMAT: u32 = 3;
-const PROJECT_FORMAT_VERSION: u32 = 4;
+const VERSION_FOUR_PROJECT_FORMAT: u32 = 4;
+const PROJECT_FORMAT_VERSION: u32 = 5;
 const PROJECT_EXTENSION: &str = "yocsow";
 const MAX_PROJECT_FILE_SIZE: usize = 1024 * 1024;
 const MAX_PROJECT_NAME_LENGTH: usize = 120;
@@ -23,6 +24,23 @@ pub struct ProjectDocument {
     format_version: u32,
     name: String,
     search_requirements: Vec<ProjectSearchRequirement>,
+    seed_map: ProjectSeedMap,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProjectSeedMap {
+    visible: bool,
+    seed: String,
+}
+
+impl Default for ProjectSeedMap {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            seed: "0".into(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,6 +123,7 @@ impl VersionOneProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
             search_requirements: Vec::new(),
+            seed_map: ProjectSeedMap::default(),
         }
     }
 }
@@ -127,6 +146,7 @@ impl VersionTwoProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
             search_requirements: self.search_requirements,
+            seed_map: ProjectSeedMap::default(),
         }
     }
 }
@@ -147,6 +167,28 @@ impl VersionThreeProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
             search_requirements: self.search_requirements,
+            seed_map: ProjectSeedMap::default(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VersionFourProjectDocument {
+    format_version: u32,
+    name: String,
+    search_requirements: Vec<ProjectSearchRequirement>,
+}
+
+impl VersionFourProjectDocument {
+    fn migrate(self) -> ProjectDocument {
+        debug_assert_eq!(self.format_version, VERSION_FOUR_PROJECT_FORMAT);
+
+        ProjectDocument {
+            format_version: PROJECT_FORMAT_VERSION,
+            name: self.name,
+            search_requirements: self.search_requirements,
+            seed_map: ProjectSeedMap::default(),
         }
     }
 }
@@ -179,6 +221,10 @@ impl ProjectDocument {
                 "project must not contain more than {MAX_SEARCH_REQUIREMENTS} search requirements"
             )));
         }
+
+        self.seed_map.seed.parse::<i64>().map_err(|_| {
+            ProjectFileError::Validation("seed map seed must be a signed 64-bit integer".into())
+        })?;
 
         let mut requirement_ids = HashSet::new();
 
@@ -283,6 +329,10 @@ pub(crate) fn load_project(path: &Path) -> Result<ProjectDocument, ProjectFileEr
             let project: VersionThreeProjectDocument = serde_json::from_value(value)?;
             project.migrate()
         }
+        version if version == u64::from(VERSION_FOUR_PROJECT_FORMAT) => {
+            let project: VersionFourProjectDocument = serde_json::from_value(value)?;
+            project.migrate()
+        }
         version if version == u64::from(PROJECT_FORMAT_VERSION) => serde_json::from_value(value)?,
         unsupported_version => {
             return Err(ProjectFileError::Validation(format!(
@@ -373,9 +423,9 @@ impl From<serde_json::Error> for ProjectFileError {
 mod tests {
     use super::{
         PROJECT_FORMAT_VERSION, ProjectBiomeSize, ProjectBiomeType, ProjectBlockPosition,
-        ProjectDocument, ProjectSearchRequirement, ProjectStructureType,
-        VERSION_ONE_PROJECT_FORMAT, VERSION_THREE_PROJECT_FORMAT, VERSION_TWO_PROJECT_FORMAT,
-        load_project, save_project,
+        ProjectDocument, ProjectSearchRequirement, ProjectSeedMap, ProjectStructureType,
+        VERSION_FOUR_PROJECT_FORMAT, VERSION_ONE_PROJECT_FORMAT, VERSION_THREE_PROJECT_FORMAT,
+        VERSION_TWO_PROJECT_FORMAT, load_project, save_project,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -394,9 +444,11 @@ mod tests {
         let loaded = load_project(&path).expect("project should be loaded");
 
         assert!(contents.ends_with('\n'));
-        assert!(contents.contains(r#""formatVersion": 4"#));
+        assert!(contents.contains(r#""formatVersion": 5"#));
         assert!(!contents.contains(r#""seedRange""#));
         assert!(contents.contains(r#""searchRequirements": []"#));
+        assert!(contents.contains(r#""visible": true"#));
+        assert!(contents.contains(r#""seed": "-9223372036854775808""#));
         assert_eq!(loaded, project);
 
         remove_test_directory(&path);
@@ -484,6 +536,7 @@ mod tests {
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
         assert_eq!(migrated.name, "Legacy world");
         assert!(migrated.search_requirements.is_empty());
+        assert_eq!(migrated.seed_map, ProjectSeedMap::default());
 
         remove_test_directory(&path);
     }
@@ -520,6 +573,7 @@ mod tests {
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
         assert_eq!(migrated.name, "Village search");
         assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
+        assert_eq!(migrated.seed_map, ProjectSeedMap::default());
 
         remove_test_directory(&path);
     }
@@ -550,6 +604,38 @@ mod tests {
 
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
         assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
+        assert_eq!(migrated.seed_map, ProjectSeedMap::default());
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn migrates_version_four_projects_and_adds_seed_map_settings() {
+        let path = test_path("version-four.yocsow");
+
+        fs::write(
+            &path,
+            format!(
+                r#"{{
+                  "formatVersion": {VERSION_FOUR_PROJECT_FORMAT},
+                  "name": "Existing map project",
+                  "searchRequirements": [{{
+                    "kind": "structure",
+                    "id": "village-1",
+                    "structureType": "village",
+                    "center": {{ "x": 120, "z": -340 }},
+                    "radiusBlocks": 1000
+                  }}]
+                }}"#
+            ),
+        )
+        .expect("version four project should be written");
+
+        let migrated = load_project(&path).expect("version four project should be migrated");
+
+        assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
+        assert_eq!(migrated.seed_map, ProjectSeedMap::default());
 
         remove_test_directory(&path);
     }
@@ -589,6 +675,24 @@ mod tests {
             save_project(&path, &project).expect_err("invalid search radii should be rejected");
 
         assert!(error.to_string().contains("search radius must be between"));
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn rejects_invalid_seed_map_seeds() {
+        let path = test_path("invalid-seed-map.yocsow");
+        let mut project = sample_project();
+        project.seed_map.seed = "9223372036854775808".into();
+
+        let error = save_project(&path, &project)
+            .expect_err("out-of-range seed map seeds should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("seed map seed must be a signed 64-bit integer")
+        );
 
         remove_test_directory(&path);
     }
@@ -651,6 +755,10 @@ mod tests {
             format_version: PROJECT_FORMAT_VERSION,
             name: "Example world".into(),
             search_requirements: Vec::new(),
+            seed_map: ProjectSeedMap {
+                visible: true,
+                seed: "-9223372036854775808".into(),
+            },
         }
     }
 

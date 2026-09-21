@@ -11,7 +11,7 @@ import { ProjectWorkspace } from './ProjectWorkspace'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 
 vi.mock('../native/projects', () => ({
-  PROJECT_FORMAT_VERSION: 4,
+  PROJECT_FORMAT_VERSION: 5,
   openLocalProject: vi.fn(),
   saveLocalProject: vi.fn(),
   selectProjectSavePath: vi.fn(),
@@ -33,6 +33,8 @@ function WorkspaceHarness() {
       <SearchRequirementsPanel
         requirements={workspace.project.searchRequirements}
         onChange={workspace.updateSearchRequirements}
+        seedMap={workspace.project.seedMap}
+        onSeedMapChange={workspace.updateSeedMap}
       />
     </>
   )
@@ -86,7 +88,7 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Loaded world.yocsow',
         project: {
-          formatVersion: 4,
+          formatVersion: 5,
           name: 'Loaded world',
           searchRequirements: [
             {
@@ -100,6 +102,10 @@ describe('ProjectWorkspace', () => {
               radiusBlocks: 750,
             },
           ],
+          seedMap: {
+            visible: true,
+            seed: '12345',
+          },
         },
       },
     })
@@ -124,6 +130,45 @@ describe('ProjectWorkspace', () => {
     expect(screen.getByText('Loaded world.yocsow')).toBeInTheDocument()
     expect(screen.getByText('Project opened.')).toBeInTheDocument()
     expect(screen.getByText('All changes saved')).toBeInTheDocument()
+    expect(
+      screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Seed 12345')).toBeInTheDocument()
+  })
+
+  it('tracks and saves seed map settings', async () => {
+    const user = userEvent.setup()
+
+    selectProjectSavePathMock.mockResolvedValue({
+      status: 'selected',
+      value: '/projects/Map workspace.yocsow',
+    })
+
+    render(<WorkspaceHarness />)
+
+    await user.click(
+      screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
+    )
+    await user.click(screen.getByRole('button', { name: 'New seed' }))
+
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+
+    const renderedSeed = screen
+      .getByText(/^Seed -?\d+$/)
+      .textContent?.replace('Seed ', '')
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(saveLocalProjectMock).toHaveBeenCalledWith(
+      '/projects/Map workspace.yocsow',
+      expect.objectContaining({
+        formatVersion: 5,
+        seedMap: {
+          visible: true,
+          seed: renderedSeed,
+        },
+      }),
+    )
   })
 
   it('saves a new project through the save dialog', async () => {
@@ -154,9 +199,13 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Survival world.yocsow',
       {
-        formatVersion: 4,
+        formatVersion: 5,
         name: 'Survival world',
         searchRequirements: [],
+        seedMap: {
+          visible: false,
+          seed: expect.any(String),
+        },
       },
     )
 
@@ -216,7 +265,7 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Village search.yocsow',
       {
-        formatVersion: 4,
+        formatVersion: 5,
         name: 'Village search',
         searchRequirements: [
           {
@@ -230,6 +279,10 @@ describe('ProjectWorkspace', () => {
             radiusBlocks: 750,
           },
         ],
+        seedMap: {
+          visible: false,
+          seed: expect.any(String),
+        },
       },
     )
 
@@ -246,9 +299,13 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Existing.yocsow',
         project: {
-          formatVersion: 4,
+          formatVersion: 5,
           name: 'Existing',
           searchRequirements: [],
+          seedMap: {
+            visible: false,
+            seed: '101',
+          },
         },
       },
     })
@@ -277,9 +334,13 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Existing.yocsow',
       {
-        formatVersion: 4,
+        formatVersion: 5,
         name: 'Existing updated',
         searchRequirements: [],
+        seedMap: {
+          visible: false,
+          seed: '101',
+        },
       },
     )
 
@@ -296,9 +357,13 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Original.yocsow',
         project: {
-          formatVersion: 4,
+          formatVersion: 5,
           name: 'Original',
           searchRequirements: [],
+          seedMap: {
+            visible: true,
+            seed: '-202',
+          },
         },
       },
     })
@@ -325,9 +390,13 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Copy.yocsow',
       {
-        formatVersion: 4,
+        formatVersion: 5,
         name: 'Original',
         searchRequirements: [],
+        seedMap: {
+          visible: true,
+          seed: '-202',
+        },
       },
     )
 
