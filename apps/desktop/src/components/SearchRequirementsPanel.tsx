@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type DragEvent } from 'react'
 import {
   BIOME_SIZE_OPTIONS,
   createBiomeRequirement,
@@ -9,7 +9,13 @@ import {
   type StructureRequirement,
   type StructureType,
 } from '../domain/search-requirements'
+import {
+  createRandomSeed,
+  type SeedMapSettings,
+} from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
+import { SeedMapWorkspace } from './SeedMapWorkspace'
+import { writeDraggedFilterId } from './seed-map-drag'
 import './SearchRequirementsPanel.css'
 
 type FilterCategory = 'structures' | 'biomes'
@@ -17,6 +23,8 @@ type FilterCategory = 'structures' | 'biomes'
 interface SearchRequirementsPanelProps {
   requirements: SearchRequirement[]
   onChange: (requirements: SearchRequirement[]) => void
+  seedMap: SeedMapSettings
+  onSeedMapChange: (seedMap: SeedMapSettings) => void
 }
 
 interface IntegerInputProps {
@@ -150,10 +158,14 @@ function createRequirementId(): string {
 export function SearchRequirementsPanel({
   requirements,
   onChange,
+  seedMap,
+  onSeedMapChange,
 }: SearchRequirementsPanelProps) {
   const [activeCategory, setActiveCategory] =
     useState<FilterCategory>('structures')
   const [filterQuery, setFilterQuery] = useState('')
+  const seedMapVisible = seedMap.visible
+  const seedMapSeed = seedMap.seed
 
   const visibleCatalogItems = filterCatalog.filter(
     (item) =>
@@ -173,15 +185,45 @@ export function SearchRequirementsPanel({
         : [],
   )
 
-  function addRequirement(item: FilterCatalogItem): void {
+  function addRequirement(
+    item: FilterCatalogItem,
+    center?: { x: number; z: number },
+  ): void {
     if (item.createRequirement === undefined) {
       return
     }
 
+    const requirement = item.createRequirement(createRequirementId())
+
     onChange([
       ...requirements,
-      item.createRequirement(createRequirementId()),
+      center === undefined ? requirement : { ...requirement, center },
     ])
+  }
+
+  function startFilterDrag(
+    event: DragEvent<HTMLButtonElement>,
+    item: FilterCatalogItem,
+  ): void {
+    if (item.createRequirement === undefined) {
+      event.preventDefault()
+      return
+    }
+
+    writeDraggedFilterId(event.dataTransfer, item.id)
+  }
+
+  function addDroppedFilter(
+    filterId: string,
+    center: { x: number; z: number },
+  ): void {
+    const item = filterCatalog.find(
+      (candidate) => candidate.id === filterId,
+    )
+
+    if (item?.createRequirement !== undefined) {
+      addRequirement(item, center)
+    }
   }
 
   function updateRequirement(
@@ -194,6 +236,19 @@ export function SearchRequirementsPanel({
           : requirement,
       ),
     )
+  }
+
+  function moveRequirement(
+    requirementId: string,
+    center: { x: number; z: number },
+  ): void {
+    const requirement = requirements.find(
+      (candidate) => candidate.id === requirementId,
+    )
+
+    if (requirement !== undefined) {
+      updateRequirement({ ...requirement, center })
+    }
   }
 
   function removeRequirement(id: string): void {
@@ -213,10 +268,30 @@ export function SearchRequirementsPanel({
           <h2 id="search-requirements-title">Seed filters</h2>
         </div>
 
-        <span className="search-requirements-count">
-          {requirements.length}{' '}
-          {requirements.length === 1 ? 'active filter' : 'active filters'}
-        </span>
+        <div className="search-requirements-heading-actions">
+          <button
+            className="seed-map-toggle"
+            type="button"
+            role="switch"
+            aria-label="Toggle Seed 2D Map"
+            aria-checked={seedMapVisible}
+            aria-controls="seed-map-workspace"
+            onClick={() => {
+              onSeedMapChange({
+                ...seedMap,
+                visible: !seedMapVisible,
+              })
+            }}
+          >
+            <span>Toggle Seed 2D Map</span>
+            <strong>{seedMapVisible ? 'On' : 'Off'}</strong>
+          </button>
+
+          <span className="search-requirements-count">
+            {requirements.length}{' '}
+            {requirements.length === 1 ? 'active filter' : 'active filters'}
+          </span>
+        </div>
       </header>
 
       <ResizablePanelGroup
@@ -290,6 +365,7 @@ export function SearchRequirementsPanel({
                   className="filter-catalog-item"
                   type="button"
                   disabled={!available}
+                  draggable={available}
                   aria-label={
                     available
                       ? `Add ${item.name} filter`
@@ -298,13 +374,18 @@ export function SearchRequirementsPanel({
                   onClick={() => {
                     addRequirement(item)
                   }}
+                  onDragStart={(event) => {
+                    startFilterDrag(event, item)
+                  }}
                   key={item.id}
                 >
                   <strong>{item.name}</strong>
                   <span>{item.description}</span>
                   <small>
                     {available
-                      ? 'Add filter'
+                      ? seedMapVisible
+                        ? 'Add or drag to map'
+                        : 'Add filter'
                       : 'Engine support required'}
                   </small>
                 </button>
@@ -319,74 +400,97 @@ export function SearchRequirementsPanel({
           </div>
         </aside>
 
-        <div className="selected-filters">
-          <header className="selected-filters-heading">
-            <div>
-              <span>Active configuration</span>
-              <h3>Selected filters</h3>
+        <div
+          className={
+            seedMapVisible
+              ? 'search-requirements-content search-requirements-content--map-visible'
+              : 'search-requirements-content'
+          }
+        >
+          <div className="selected-filters">
+            <header className="selected-filters-heading">
+              <div>
+                <span>Active configuration</span>
+                <h3>Selected filters</h3>
+              </div>
+              <small>Changes are saved with the project</small>
+            </header>
+
+            <div className="selected-filter-groups">
+              <section
+                className="selected-filter-group"
+                aria-labelledby="selected-biomes-title"
+              >
+                <header className="selected-filter-group-heading">
+                  <h4 id="selected-biomes-title">Biomes</h4>
+                  <span>{biomeRequirements.length}</span>
+                </header>
+
+                {biomeRequirements.length === 0 ? (
+                  <div className="search-requirements-empty">
+                    <strong>No active biomes</strong>
+                    <p>Add a biome from the catalog.</p>
+                  </div>
+                ) : (
+                  <div className="search-requirements-list">
+                    {biomeRequirements.map(({ requirement, index }) => (
+                      <BiomeRequirementCard
+                        requirement={requirement}
+                        index={index}
+                        onChange={updateRequirement}
+                        onRemove={removeRequirement}
+                        key={requirement.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section
+                className="selected-filter-group"
+                aria-labelledby="selected-structures-title"
+              >
+                <header className="selected-filter-group-heading">
+                  <h4 id="selected-structures-title">Structures</h4>
+                  <span>{structureRequirements.length}</span>
+                </header>
+
+                {structureRequirements.length === 0 ? (
+                  <div className="search-requirements-empty">
+                    <strong>No active structures</strong>
+                    <p>Add a structure from the catalog.</p>
+                  </div>
+                ) : (
+                  <div className="search-requirements-list">
+                    {structureRequirements.map(({ requirement, index }) => (
+                      <StructureRequirementCard
+                        requirement={requirement}
+                        index={index}
+                        onChange={updateRequirement}
+                        onRemove={removeRequirement}
+                        key={requirement.id}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
-            <small>Changes are saved with the project</small>
-          </header>
-
-          <div className="selected-filter-groups">
-            <section
-              className="selected-filter-group"
-              aria-labelledby="selected-biomes-title"
-            >
-              <header className="selected-filter-group-heading">
-                <h4 id="selected-biomes-title">Biomes</h4>
-                <span>{biomeRequirements.length}</span>
-              </header>
-
-              {biomeRequirements.length === 0 ? (
-                <div className="search-requirements-empty">
-                  <strong>No active biomes</strong>
-                  <p>Add a biome from the catalog.</p>
-                </div>
-              ) : (
-                <div className="search-requirements-list">
-                  {biomeRequirements.map(({ requirement, index }) => (
-                    <BiomeRequirementCard
-                      requirement={requirement}
-                      index={index}
-                      onChange={updateRequirement}
-                      onRemove={removeRequirement}
-                      key={requirement.id}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section
-              className="selected-filter-group"
-              aria-labelledby="selected-structures-title"
-            >
-              <header className="selected-filter-group-heading">
-                <h4 id="selected-structures-title">Structures</h4>
-                <span>{structureRequirements.length}</span>
-              </header>
-
-              {structureRequirements.length === 0 ? (
-                <div className="search-requirements-empty">
-                  <strong>No active structures</strong>
-                  <p>Add a structure from the catalog.</p>
-                </div>
-              ) : (
-                <div className="search-requirements-list">
-                  {structureRequirements.map(({ requirement, index }) => (
-                    <StructureRequirementCard
-                      requirement={requirement}
-                      index={index}
-                      onChange={updateRequirement}
-                      onRemove={removeRequirement}
-                      key={requirement.id}
-                    />
-                  ))}
-                </div>
-              )}
-            </section>
           </div>
+
+          {seedMapVisible && (
+            <SeedMapWorkspace
+              seed={seedMapSeed}
+              requirements={requirements}
+              onRandomize={() => {
+                onSeedMapChange({
+                  ...seedMap,
+                  seed: createRandomSeed(),
+                })
+              }}
+              onFilterDrop={addDroppedFilter}
+              onRequirementMove={moveRequirement}
+            />
+          )}
         </div>
       </ResizablePanelGroup>
     </section>

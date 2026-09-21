@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -69,6 +69,16 @@ describe('App', () => {
     expect(
       screen.getByRole('button', { name: /Seed Finder/i }),
     ).toHaveAttribute('aria-current', 'page')
+
+    const navigationButtons = within(
+      screen.getByRole('navigation', { name: 'Workspace' }),
+    ).getAllByRole('button')
+
+    expect(navigationButtons).toHaveLength(4)
+    expect(navigationButtons[0]).toHaveAccessibleName(/Project/i)
+    expect(navigationButtons[1]).toHaveAccessibleName(/Seed Finder/i)
+    expect(navigationButtons[2]).toHaveAccessibleName(/World Editor/i)
+    expect(navigationButtons[3]).toHaveAccessibleName(/Settings/i)
   })
 
   it('supports keyboard resizing for workspace panels', async () => {
@@ -193,5 +203,30 @@ describe('App', () => {
       screen.getByText(/Search stopped\. Checked 1,000 seeds/),
     ).toBeInTheDocument()
     expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the project seed map when navigating between views', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const toggle = screen.getByRole('switch', {
+      name: 'Toggle Seed 2D Map',
+    })
+    await user.click(toggle)
+
+    const renderedSeed = screen.getByText(/^Seed -?\d+$/).textContent
+
+    await user.click(
+      screen.getByRole('button', { name: /Project/i }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: /Seed Finder/i }),
+    )
+
+    expect(
+      screen.getByRole('switch', { name: 'Toggle Seed 2D Map' }),
+    ).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText(renderedSeed ?? '')).toBeInTheDocument()
   })
 })

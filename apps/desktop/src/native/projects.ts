@@ -1,13 +1,15 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import type { SearchRequirement } from '../domain/search-requirements'
+import type { SeedMapSettings } from '../domain/seed-map'
 
-export const PROJECT_FORMAT_VERSION = 4
+export const PROJECT_FORMAT_VERSION = 5
 
 export interface ProjectDocument {
   formatVersion: number
   name: string
   searchRequirements: SearchRequirement[]
+  seedMap: SeedMapSettings
 }
 
 export interface OpenedProject {
