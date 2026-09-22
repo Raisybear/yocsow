@@ -6,9 +6,14 @@ Thank you for your interest in contributing to YOCSOW.
 
 1. Create a branch from `main`.
 2. Keep changes focused and add appropriate tests.
-3. Run `./scripts/verify.sh`.
-4. Submit a pull request to `main`.
-5. Ensure all required checks pass.
+3. During implementation, run `npm run check:changed` before each commit.
+4. Before manual application testing, run `./scripts/verify.sh`.
+5. Submit a pull request to `main`.
+6. Run the full verification again and ensure all required checks pass before
+   merging.
+
+See [Testing and verification](docs/development/testing.md) for targeted area
+checks, branch-wide checks, and the full verification policy.
 
 ## Licensing of contributions
 
