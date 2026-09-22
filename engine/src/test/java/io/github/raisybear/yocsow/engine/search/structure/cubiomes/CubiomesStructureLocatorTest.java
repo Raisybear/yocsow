@@ -64,6 +64,24 @@ final class CubiomesStructureLocatorTest {
   }
 
   @Test
+  void locatesWoodlandMansionsThroughTheGenericNativeBoundary() {
+    RecordingNativeLibrary nativeLibrary = new RecordingNativeLibrary();
+    nativeLibrary.positions = List.of(new BlockPosition(4096, -2048));
+    CubiomesStructureLocator locator =
+        new CubiomesStructureLocator(StructureType.WOODLAND_MANSION, 3, nativeLibrary);
+    StructureSearchRequest request =
+        new StructureSearchRequest(
+            42,
+            MinecraftVersion.JAVA_1_21,
+            new StructureRequirement(
+                "mansion-1", StructureType.WOODLAND_MANSION, new BlockPosition(0, 0), 8000));
+
+    assertEquals(nativeLibrary.positions, locator.findNearestCandidates(request, 1));
+    assertEquals(StructureType.WOODLAND_MANSION, locator.structureType());
+    assertEquals(3, nativeLibrary.structure);
+  }
+
+  @Test
   void rejectsRequirementsForAnotherStructureType() {
     CubiomesStructureLocator locator =
         new CubiomesStructureLocator(StructureType.RUINED_PORTAL, 2, new RecordingNativeLibrary());

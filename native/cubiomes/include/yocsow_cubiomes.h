@@ -36,7 +36,8 @@ enum YocsowBiome {
 
 enum YocsowStructure {
   YOCSOW_STRUCTURE_VILLAGE = 1,
-  YOCSOW_STRUCTURE_RUINED_PORTAL = 2
+  YOCSOW_STRUCTURE_RUINED_PORTAL = 2,
+  YOCSOW_STRUCTURE_WOODLAND_MANSION = 3
 };
 
 enum YocsowResultLimits {

@@ -4,6 +4,7 @@ import {
   createBiomeRequirement,
   createRuinedPortalRequirement,
   createVillageRequirement,
+  createWoodlandMansionRequirement,
   type BiomeRequirement,
   type SearchRequirement,
   type StructureRequirement,
@@ -61,6 +62,13 @@ const filterCatalog: FilterCatalogItem[] = [
     name: 'Ruined Portal',
     description: 'Locate ruined portals around a target position.',
     createRequirement: createRuinedPortalRequirement,
+  },
+  {
+    id: 'woodland-mansion',
+    category: 'structures',
+    name: 'Woodland Mansion',
+    description: 'Locate woodland mansions around a target position.',
+    createRequirement: createWoodlandMansionRequirement,
   },
   {
     id: 'ocean-monument',
@@ -545,6 +553,8 @@ function structurePresentation(structureType: StructureType): {
       return { name: 'Village' }
     case 'ruinedPortal':
       return { name: 'Ruined Portal' }
+    case 'woodlandMansion':
+      return { name: 'Woodland Mansion' }
   }
 }
 

@@ -3,6 +3,7 @@ package io.github.raisybear.yocsow.engine.search;
 public enum StructureType {
   VILLAGE("village", true),
   RUINED_PORTAL("ruinedPortal", true),
+  WOODLAND_MANSION("woodlandMansion", true),
   TAIGA("taiga", false);
 
   private final String identifier;

@@ -844,6 +844,41 @@ static void finds_ruined_portals_through_generic_structure_search(void) {
   }
 }
 
+static void finds_woodland_mansions_through_generic_structure_search(void) {
+  int32_t result_count = 0;
+  struct YocsowBlockPosition results[4];
+
+  int32_t status =
+      yocsow_find_structures(
+          YOCSOW_MC_JAVA_1_21,
+          YOCSOW_STRUCTURE_WOODLAND_MANSION,
+          42,
+          0,
+          0,
+          20000,
+          4,
+          &result_count,
+          results);
+
+  expect_equal(
+      "woodland mansion status",
+      YOCSOW_CUBIOMES_OK,
+      status);
+  expect_true(
+      "woodland mansion found",
+      result_count > 0);
+
+  for (int32_t index = 0; index < result_count; index++) {
+    int64_t distance_squared =
+        (int64_t)results[index].x * results[index].x +
+        (int64_t)results[index].z * results[index].z;
+
+    expect_true(
+        "woodland mansion inside radius",
+        distance_squared <= 20000LL * 20000LL);
+  }
+}
+
 static void rejects_unknown_generic_structure_types(void) {
   int32_t result_count = 123;
   struct YocsowBlockPosition result = {456, 789};
@@ -920,6 +955,7 @@ int main(void) {
   seed_search_assigns_distinct_villages();
   rejects_invalid_seed_search_buffers();
   finds_ruined_portals_through_generic_structure_search();
+  finds_woodland_mansions_through_generic_structure_search();
   rejects_unknown_generic_structure_types();
   rejects_unsupported_versions();
   rejects_invalid_radii();

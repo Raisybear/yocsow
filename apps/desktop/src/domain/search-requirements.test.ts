@@ -4,6 +4,7 @@ import {
   createBiomeRequirement,
   createRuinedPortalRequirement,
   createVillageRequirement,
+  createWoodlandMansionRequirement,
   DEFAULT_STRUCTURE_RADIUS_BLOCKS,
   searchRequirementRadiusBlocks,
   type SearchRequirement,
@@ -30,6 +31,16 @@ describe('search requirements', () => {
       kind: 'structure',
       id: 'portal-1',
       structureType: 'ruinedPortal',
+      center: { x: 0, z: 0 },
+      radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
+    })
+  })
+
+  it('creates a woodland mansion requirement with structure defaults', () => {
+    expect(createWoodlandMansionRequirement('mansion-1')).toEqual({
+      kind: 'structure',
+      id: 'mansion-1',
+      structureType: 'woodlandMansion',
       center: { x: 0, z: 0 },
       radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
     })

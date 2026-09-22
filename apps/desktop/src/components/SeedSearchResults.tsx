@@ -56,6 +56,8 @@ function matchName(structureType: string): string {
       return 'Taiga biome'
     case 'ruinedPortal':
       return 'Ruined Portal'
+    case 'woodlandMansion':
+      return 'Woodland Mansion'
     default:
       return 'Village'
   }
