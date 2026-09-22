@@ -252,6 +252,7 @@ impl SeedSearchRequirement {
 
         if structure_type != "village"
             && structure_type != "ruinedPortal"
+            && structure_type != "woodlandMansion"
             && structure_type != "taiga"
         {
             return Err(input_error(format!(
@@ -598,6 +599,7 @@ impl StructureMatch {
 
         if self.structure_type != "village"
             && self.structure_type != "ruinedPortal"
+            && self.structure_type != "woodlandMansion"
             && self.structure_type != "taiga"
         {
             return Err(protocol_error(
@@ -760,6 +762,19 @@ mod tests {
 
         assert_eq!(value["requirements"][0]["structureType"], "ruinedPortal");
         assert_eq!(value["requirements"][0]["radiusBlocks"], 640);
+    }
+
+    #[test]
+    fn query_accepts_woodland_mansion_requirements() {
+        let mut mansion = requirement("mansion-1", "4096", "-2048", "8000");
+        mansion.structure_type = "woodlandMansion".to_owned();
+
+        let query = SeedSearchQuery::parse("42", 1, "1.21", vec![mansion], 1)
+            .expect("woodland mansion requirement should be valid");
+        let value = serde_json::to_value(query).expect("query should serialize");
+
+        assert_eq!(value["requirements"][0]["structureType"], "woodlandMansion");
+        assert_eq!(value["requirements"][0]["radiusBlocks"], 8000);
     }
 
     #[test]

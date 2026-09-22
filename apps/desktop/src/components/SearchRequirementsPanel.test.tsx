@@ -390,6 +390,38 @@ describe('SearchRequirementsPanel', () => {
     ])
   })
 
+  it('adds and configures a woodland mansion requirement', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+    await user.click(
+      screen.getByRole('button', { name: 'Add Woodland Mansion filter' }),
+    )
+
+    const requirement = screen.getByRole('group', {
+      name: 'Woodland Mansion requirement 1',
+    })
+    const xCoordinate = within(requirement).getByLabelText('X coordinate')
+    const zCoordinate = within(requirement).getByLabelText('Z coordinate')
+    const radius = within(requirement).getByLabelText('Radius in blocks')
+
+    await user.clear(xCoordinate)
+    await user.type(xCoordinate, '4096')
+    await user.clear(zCoordinate)
+    await user.type(zCoordinate, '-2048')
+    await user.clear(radius)
+    await user.type(radius, '8000')
+
+    expect(renderedRequirements()).toMatchObject([
+      {
+        kind: 'structure',
+        structureType: 'woodlandMansion',
+        center: { x: 4096, z: -2048 },
+        radiusBlocks: 8000,
+      },
+    ])
+  })
+
   it('removes an existing requirement', async () => {
     const user = userEvent.setup()
 

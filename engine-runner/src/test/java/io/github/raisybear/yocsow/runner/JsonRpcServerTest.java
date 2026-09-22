@@ -140,6 +140,26 @@ class JsonRpcServerTest {
   }
 
   @Test
+  void searchesSeedsAndReturnsWoodlandMansionMatches() throws IOException {
+    RecordingStructureLocator locator =
+        new RecordingStructureLocator(StructureType.WOODLAND_MANSION);
+    locator.locate(42, new BlockPosition(4096, -2048));
+
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":42,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"mansion-1","structureType":"woodlandMansion","center":{"x":0,"z":0},"radiusBlocks":8000}],"resultLimit":1}}
+        """;
+
+    List<JsonNode> responses = serve(input, serviceUsing(locator));
+    JsonNode match = responses.get(1).at("/result/candidates/0/matches/0");
+
+    assertEquals("woodlandMansion", match.get("structureType").stringValue());
+    assertEquals(4096, match.at("/actualPosition/x").longValue());
+    assertEquals(-2048, match.at("/actualPosition/z").longValue());
+  }
+
+  @Test
   void requiresInitializationBeforeSeedQueries() throws IOException {
     String input =
         """

@@ -159,6 +159,7 @@ final class JsonRpcServer {
             List.of(
                 new CubiomesVillageLocator(),
                 CubiomesStructureLocator.ruinedPortal(),
+                CubiomesStructureLocator.woodlandMansion(),
                 CubiomesBiomeLocator.taiga())));
   }
 }

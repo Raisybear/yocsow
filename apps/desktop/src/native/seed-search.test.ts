@@ -94,4 +94,29 @@ describe('continuous seed search request', () => {
       },
     ])
   })
+
+  it('serializes woodland mansion requirements for the engine', () => {
+    const request = createSeedSearchRequest(
+      BigInt(42),
+      [
+        {
+          kind: 'structure',
+          id: 'mansion-1',
+          structureType: 'woodlandMansion',
+          center: { x: 4096, z: -2048 },
+          radiusBlocks: 8000,
+        },
+      ],
+      5,
+    )
+
+    expect(request.requirements).toEqual([
+      {
+        id: 'mansion-1',
+        structureType: 'woodlandMansion',
+        center: { x: '4096', z: '-2048' },
+        radiusBlocks: '8000',
+      },
+    ])
+  })
 })

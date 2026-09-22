@@ -19,6 +19,7 @@ public final class CubiomesStructureLocator implements StructureLocator {
 
   private static final int NATIVE_JAVA_1_21 = 1;
   private static final int NATIVE_RUINED_PORTAL = 2;
+  private static final int NATIVE_WOODLAND_MANSION = 3;
   private static final int MAXIMUM_BATCH_SEEDS = 10_000;
   private static final int MAXIMUM_SEARCH_AREAS = 32;
   private static final int MAXIMUM_RESULTS = 64;
@@ -37,6 +38,13 @@ public final class CubiomesStructureLocator implements StructureLocator {
   public static CubiomesStructureLocator ruinedPortal() {
     return new CubiomesStructureLocator(
         StructureType.RUINED_PORTAL, NATIVE_RUINED_PORTAL, CubiomesStructureNativeLibrary.load());
+  }
+
+  public static CubiomesStructureLocator woodlandMansion() {
+    return new CubiomesStructureLocator(
+        StructureType.WOODLAND_MANSION,
+        NATIVE_WOODLAND_MANSION,
+        CubiomesStructureNativeLibrary.load());
   }
 
   CubiomesStructureLocator(

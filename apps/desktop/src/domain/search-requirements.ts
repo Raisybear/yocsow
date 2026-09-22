@@ -1,6 +1,9 @@
 export const DEFAULT_STRUCTURE_RADIUS_BLOCKS = 1_000
 
-export type StructureType = 'village' | 'ruinedPortal'
+export type StructureType =
+  | 'village'
+  | 'ruinedPortal'
+  | 'woodlandMansion'
 export type BiomeType = 'taiga'
 
 export const BIOME_SIZE_OPTIONS = [
@@ -56,6 +59,12 @@ export function createRuinedPortalRequirement(
   id: string,
 ): StructureRequirement {
   return createStructureRequirement(id, 'ruinedPortal')
+}
+
+export function createWoodlandMansionRequirement(
+  id: string,
+): StructureRequirement {
+  return createStructureRequirement(id, 'woodlandMansion')
 }
 
 export function createStructureRequirement(
