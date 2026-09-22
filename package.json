@@ -6,6 +6,12 @@
     "apps/*"
   ],
   "scripts": {
+    "check:all": "node scripts/check-changed.mjs --all",
+    "check:changed": "node scripts/check-changed.mjs",
+    "check:frontend": "node scripts/check-changed.mjs --area frontend",
+    "check:java": "node scripts/check-changed.mjs --area java",
+    "check:native": "node scripts/check-changed.mjs --area native",
+    "check:rust": "node scripts/check-changed.mjs --area rust",
     "dev:desktop": "npm run dev --workspace=@yocsow/desktop",
     "prepare:engine-runner": "node scripts/prepare-engine-runner.mjs",
     "prepare:desktop-bundle": "node scripts/prepare-desktop-bundle.mjs",
@@ -14,7 +20,8 @@
     "build:desktop": "npm run build --workspace=@yocsow/desktop",
     "build:desktop:native": "node scripts/build-desktop-native.mjs",
     "lint:desktop": "npm run lint --workspace=@yocsow/desktop",
-    "test:desktop": "npm run test --workspace=@yocsow/desktop"
+    "test:desktop": "npm run test --workspace=@yocsow/desktop",
+    "test:checks": "node --test --test-isolation=none scripts/check-changed.test.mjs"
   },
   "engines": {
     "node": "24.20.0",

@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:files": "vitest run --passWithNoTests",
+    "test:related": "vitest related --run --passWithNoTests",
     "test:watch": "vitest",
+    "typecheck": "tsc -b --pretty false",
     "preview": "vite preview",
     "tauri": "tauri"
   },

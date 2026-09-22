@@ -69,6 +69,10 @@ run_step \
   git diff --cached --check
 
 run_step \
+  "Test development check selection" \
+  npm run test:checks
+
+run_step \
   "Configure native components" \
   cmake \
     --fresh \
