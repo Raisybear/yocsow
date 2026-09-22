@@ -69,6 +69,18 @@ To verify only the installed development tools and their versions, run:
 ./scripts/verify-toolchain.sh
 ```
 
+## Testing and verification
+
+Use the change-aware check during implementation:
+
+```bash
+npm run check:changed
+```
+
+It selects the relevant tests and static checks for the current working-tree
+changes. The complete command reference and selection rules are documented in
+[Testing and verification](testing.md).
+
 ## Full project verification
 
 To run frontend linting, frontend tests, frontend compilation, Java checks,
@@ -78,8 +90,9 @@ Rust formatting, Rust linting, Rust compilation, and Rust tests, run:
 ./scripts/verify.sh
 ```
 
-This is the standard local verification command before committing or pushing
-changes.
+This is the standard local verification command before manually testing the
+application and before merging a pull request. It remains the authoritative
+project-wide check.
 
 ## Native desktop development
 
