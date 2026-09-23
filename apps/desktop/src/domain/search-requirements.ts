@@ -4,6 +4,7 @@ export type StructureType =
   | 'village'
   | 'ruinedPortal'
   | 'woodlandMansion'
+  | 'desertTemple'
 export type BiomeType = 'taiga'
 
 export const BIOME_SIZE_OPTIONS = [
@@ -65,6 +66,12 @@ export function createWoodlandMansionRequirement(
   id: string,
 ): StructureRequirement {
   return createStructureRequirement(id, 'woodlandMansion')
+}
+
+export function createDesertTempleRequirement(
+  id: string,
+): StructureRequirement {
+  return createStructureRequirement(id, 'desertTemple')
 }
 
 export function createStructureRequirement(

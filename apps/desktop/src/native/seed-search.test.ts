@@ -119,4 +119,29 @@ describe('continuous seed search request', () => {
       },
     ])
   })
+
+  it('serializes desert temple requirements for the engine', () => {
+    const request = createSeedSearchRequest(
+      BigInt(42),
+      [
+        {
+          kind: 'structure',
+          id: 'temple-1',
+          structureType: 'desertTemple',
+          center: { x: 1600, z: -3200 },
+          radiusBlocks: 5000,
+        },
+      ],
+      5,
+    )
+
+    expect(request.requirements).toEqual([
+      {
+        id: 'temple-1',
+        structureType: 'desertTemple',
+        center: { x: '1600', z: '-3200' },
+        radiusBlocks: '5000',
+      },
+    ])
+  })
 })

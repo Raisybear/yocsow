@@ -422,6 +422,38 @@ describe('SearchRequirementsPanel', () => {
     ])
   })
 
+  it('adds and configures a desert temple requirement', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+    await user.click(
+      screen.getByRole('button', { name: 'Add Desert Temple filter' }),
+    )
+
+    const requirement = screen.getByRole('group', {
+      name: 'Desert Temple requirement 1',
+    })
+    const xCoordinate = within(requirement).getByLabelText('X coordinate')
+    const zCoordinate = within(requirement).getByLabelText('Z coordinate')
+    const radius = within(requirement).getByLabelText('Radius in blocks')
+
+    await user.clear(xCoordinate)
+    await user.type(xCoordinate, '1600')
+    await user.clear(zCoordinate)
+    await user.type(zCoordinate, '-3200')
+    await user.clear(radius)
+    await user.type(radius, '5000')
+
+    expect(renderedRequirements()).toMatchObject([
+      {
+        kind: 'structure',
+        structureType: 'desertTemple',
+        center: { x: 1600, z: -3200 },
+        radiusBlocks: 5000,
+      },
+    ])
+  })
+
   it('removes an existing requirement', async () => {
     const user = userEvent.setup()
 

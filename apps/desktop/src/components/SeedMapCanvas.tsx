@@ -167,7 +167,9 @@ function requirementMarkerLabel(
         ? 'Village'
         : requirement.structureType === 'ruinedPortal'
           ? 'Ruined Portal'
-          : 'Woodland Mansion'
+          : requirement.structureType === 'woodlandMansion'
+            ? 'Woodland Mansion'
+            : 'Desert Temple'
 
   return `${name} filter at X ${requirement.center.x}, Z ${requirement.center.z} with ${radiusBlocks} block search radius`
 }

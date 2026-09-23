@@ -60,10 +60,12 @@ class StructureRequirementTest {
     assertEquals(StructureType.VILLAGE, StructureType.fromIdentifier("village"));
     assertEquals(StructureType.RUINED_PORTAL, StructureType.fromIdentifier("ruinedPortal"));
     assertEquals(StructureType.WOODLAND_MANSION, StructureType.fromIdentifier("woodlandMansion"));
+    assertEquals(StructureType.DESERT_TEMPLE, StructureType.fromIdentifier("desertTemple"));
     assertEquals(StructureType.TAIGA, StructureType.fromIdentifier("taiga"));
     assertTrue(StructureType.VILLAGE.requiresDistinctPosition());
     assertTrue(StructureType.RUINED_PORTAL.requiresDistinctPosition());
     assertTrue(StructureType.WOODLAND_MANSION.requiresDistinctPosition());
+    assertTrue(StructureType.DESERT_TEMPLE.requiresDistinctPosition());
     assertFalse(StructureType.TAIGA.requiresDistinctPosition());
   }
 
