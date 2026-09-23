@@ -71,6 +71,15 @@ function classifyFile(state, rawFilePath) {
   const filePath = normalizePath(rawFilePath)
 
   if (
+    filePath === 'config/minecraft-java-releases.json' ||
+    filePath === 'scripts/minecraft-version-catalog.mjs' ||
+    filePath === 'scripts/minecraft-version-catalog.test.mjs'
+  ) {
+    state.minecraftVersionCatalog = true
+    return
+  }
+
+  if (
     /^(?:README|CONTRIBUTING|THIRD_PARTY_NOTICES)\.md$/.test(filePath) ||
     filePath === 'LICENSE' ||
     filePath.startsWith('docs/') ||
@@ -190,6 +199,7 @@ function emptySelection() {
     javaModules: new Set(),
     native: false,
     tooling: false,
+    minecraftVersionCatalog: false,
     full: false,
     fullReasons: new Set(),
   }
@@ -468,7 +478,8 @@ export function createCheckPlan(
     state.rustFilters.size > 0 ||
     state.javaModules.size > 0 ||
     state.native ||
-    state.tooling
+    state.tooling ||
+    state.minecraftVersionCatalog
 
   if (!hasSelection) {
     return {
@@ -491,6 +502,20 @@ export function createCheckPlan(
               '--test',
               '--test-isolation=none',
               'scripts/check-changed.test.mjs',
+            ],
+          ),
+        ]
+      : []),
+    ...(state.minecraftVersionCatalog
+      ? [
+          step(
+            'minecraft-version-catalog-test',
+            'Test Minecraft Java release catalog',
+            'node',
+            [
+              '--test',
+              '--test-isolation=none',
+              'scripts/minecraft-version-catalog.test.mjs',
             ],
           ),
         ]
