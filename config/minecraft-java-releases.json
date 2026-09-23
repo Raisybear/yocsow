@@ -115,6 +115,10 @@
   "serverOnlyReleaseIds": [
     "1.0.1"
   ],
+  "generationProfilePolicy": {
+    "pendingProfilePrefix": "pending/java/",
+    "verifiedProfiles": []
+  },
   "sources": [
     {
       "id": "mojang-launcher-manifest",

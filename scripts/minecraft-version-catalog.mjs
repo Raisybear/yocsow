@@ -42,6 +42,73 @@ export function compareMinecraftReleaseIds(left, right) {
   return 0
 }
 
+function validateGenerationProfilePolicy(catalog, uniqueReleaseIds) {
+  const policy = catalog.generationProfilePolicy
+
+  requireCondition(
+    policy !== null && typeof policy === 'object' && !Array.isArray(policy),
+    'generationProfilePolicy must be an object',
+  )
+  requireCondition(
+    typeof policy.pendingProfilePrefix === 'string' &&
+      /^[a-z0-9][a-z0-9./-]*\/$/.test(policy.pendingProfilePrefix),
+    'pendingProfilePrefix must be a stable path-like prefix',
+  )
+  requireCondition(
+    Array.isArray(policy.verifiedProfiles),
+    'verifiedProfiles must be an array',
+  )
+
+  const profileIds = new Set()
+  const assignedReleaseIds = new Set()
+
+  for (const profile of policy.verifiedProfiles) {
+    requireCondition(
+      profile !== null && typeof profile === 'object' && !Array.isArray(profile),
+      'every verified profile must be an object',
+    )
+    requireCondition(
+      typeof profile.id === 'string' &&
+        /^[a-z0-9][a-z0-9./-]*$/.test(profile.id),
+      'every verified profile must have a stable id',
+    )
+    requireCondition(
+      !profile.id.startsWith(policy.pendingProfilePrefix),
+      `verified profile ${profile.id} uses the reserved pending prefix`,
+    )
+    requireCondition(
+      !profileIds.has(profile.id),
+      `duplicate verified profile id ${profile.id}`,
+    )
+    profileIds.add(profile.id)
+
+    requireCondition(
+      Array.isArray(profile.releaseIds) && profile.releaseIds.length > 0,
+      `verified profile ${profile.id} must contain releaseIds`,
+    )
+    requireCondition(
+      new Set(profile.releaseIds).size === profile.releaseIds.length,
+      `verified profile ${profile.id} contains duplicate releases`,
+    )
+    requireCondition(
+      profile.releaseIds.includes(profile.representativeReleaseId),
+      `verified profile ${profile.id} must contain its representative release`,
+    )
+
+    for (const releaseId of profile.releaseIds) {
+      requireCondition(
+        uniqueReleaseIds.has(releaseId),
+        `verified profile ${profile.id} references unknown release ${releaseId}`,
+      )
+      requireCondition(
+        !assignedReleaseIds.has(releaseId),
+        `release ${releaseId} belongs to more than one verified profile`,
+      )
+      assignedReleaseIds.add(releaseId)
+    }
+  }
+}
+
 export function validateMinecraftJavaReleaseCatalog(catalog) {
   requireCondition(catalog?.schemaVersion === 1, 'schemaVersion must be 1')
   requireCondition(catalog.edition === 'java', 'edition must be java')
@@ -109,6 +176,8 @@ export function validateMinecraftJavaReleaseCatalog(catalog) {
     )
   }
 
+  validateGenerationProfilePolicy(catalog, uniqueReleaseIds)
+
   requireCondition(
     Array.isArray(catalog.sources) && catalog.sources.length > 0,
     'sources must be a non-empty array',
@@ -130,6 +199,63 @@ export function validateMinecraftJavaReleaseCatalog(catalog) {
   }
 
   return catalog
+}
+
+export function createMinecraftJavaGenerationProfileIndex(catalog) {
+  validateMinecraftJavaReleaseCatalog(catalog)
+
+  const verifiedProfileByReleaseId = new Map()
+
+  for (const profile of catalog.generationProfilePolicy.verifiedProfiles) {
+    const normalizedProfile = Object.freeze({
+      id: profile.id,
+      representativeReleaseId: profile.representativeReleaseId,
+      releaseIds: Object.freeze([...profile.releaseIds]),
+      verificationStatus: 'verified',
+    })
+
+    for (const releaseId of profile.releaseIds) {
+      verifiedProfileByReleaseId.set(releaseId, normalizedProfile)
+    }
+  }
+
+  const profiles = []
+  const profileByReleaseId = Object.create(null)
+  const addedProfileIds = new Set()
+
+  for (const releaseId of catalog.releaseIds) {
+    const verifiedProfile = verifiedProfileByReleaseId.get(releaseId)
+    const profile =
+      verifiedProfile ??
+      Object.freeze({
+        id: `${catalog.generationProfilePolicy.pendingProfilePrefix}${releaseId}`,
+        representativeReleaseId: releaseId,
+        releaseIds: Object.freeze([releaseId]),
+        verificationStatus: 'pending',
+      })
+
+    profileByReleaseId[releaseId] = profile
+
+    if (!addedProfileIds.has(profile.id)) {
+      profiles.push(profile)
+      addedProfileIds.add(profile.id)
+    }
+  }
+
+  return Object.freeze({
+    profiles: Object.freeze(profiles),
+    profileByReleaseId: Object.freeze(profileByReleaseId),
+  })
+}
+
+export function requireMinecraftJavaGenerationProfile(index, releaseId) {
+  const profile = index.profileByReleaseId[releaseId]
+
+  if (profile === undefined) {
+    throw new Error(`Unknown Minecraft Java release: ${releaseId}`)
+  }
+
+  return profile
 }
 
 export function loadMinecraftJavaReleaseCatalog(
