@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   biomeSizeRadiusBlocks,
   createBiomeRequirement,
+  createDesertTempleRequirement,
   createRuinedPortalRequirement,
   createVillageRequirement,
   createWoodlandMansionRequirement,
@@ -41,6 +42,16 @@ describe('search requirements', () => {
       kind: 'structure',
       id: 'mansion-1',
       structureType: 'woodlandMansion',
+      center: { x: 0, z: 0 },
+      radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
+    })
+  })
+
+  it('creates a desert temple requirement with structure defaults', () => {
+    expect(createDesertTempleRequirement('temple-1')).toEqual({
+      kind: 'structure',
+      id: 'temple-1',
+      structureType: 'desertTemple',
       center: { x: 0, z: 0 },
       radiusBlocks: DEFAULT_STRUCTURE_RADIUS_BLOCKS,
     })

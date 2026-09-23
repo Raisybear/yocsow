@@ -2,6 +2,7 @@ import { useState, type DragEvent } from 'react'
 import {
   BIOME_SIZE_OPTIONS,
   createBiomeRequirement,
+  createDesertTempleRequirement,
   createRuinedPortalRequirement,
   createVillageRequirement,
   createWoodlandMansionRequirement,
@@ -69,6 +70,13 @@ const filterCatalog: FilterCatalogItem[] = [
     name: 'Woodland Mansion',
     description: 'Locate woodland mansions around a target position.',
     createRequirement: createWoodlandMansionRequirement,
+  },
+  {
+    id: 'desert-temple',
+    category: 'structures',
+    name: 'Desert Temple',
+    description: 'Locate desert temples around a target position.',
+    createRequirement: createDesertTempleRequirement,
   },
   {
     id: 'ocean-monument',
@@ -555,6 +563,8 @@ function structurePresentation(structureType: StructureType): {
       return { name: 'Ruined Portal' }
     case 'woodlandMansion':
       return { name: 'Woodland Mansion' }
+    case 'desertTemple':
+      return { name: 'Desert Temple' }
   }
 }
 

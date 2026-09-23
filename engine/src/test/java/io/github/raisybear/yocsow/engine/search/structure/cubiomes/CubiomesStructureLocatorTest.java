@@ -82,6 +82,24 @@ final class CubiomesStructureLocatorTest {
   }
 
   @Test
+  void locatesDesertTemplesThroughTheGenericNativeBoundary() {
+    RecordingNativeLibrary nativeLibrary = new RecordingNativeLibrary();
+    nativeLibrary.positions = List.of(new BlockPosition(1600, -3200));
+    CubiomesStructureLocator locator =
+        new CubiomesStructureLocator(StructureType.DESERT_TEMPLE, 4, nativeLibrary);
+    StructureSearchRequest request =
+        new StructureSearchRequest(
+            42,
+            MinecraftVersion.JAVA_1_21,
+            new StructureRequirement(
+                "temple-1", StructureType.DESERT_TEMPLE, new BlockPosition(0, 0), 5000));
+
+    assertEquals(nativeLibrary.positions, locator.findNearestCandidates(request, 1));
+    assertEquals(StructureType.DESERT_TEMPLE, locator.structureType());
+    assertEquals(4, nativeLibrary.structure);
+  }
+
+  @Test
   void rejectsRequirementsForAnotherStructureType() {
     CubiomesStructureLocator locator =
         new CubiomesStructureLocator(StructureType.RUINED_PORTAL, 2, new RecordingNativeLibrary());

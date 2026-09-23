@@ -58,6 +58,8 @@ function matchName(structureType: string): string {
       return 'Ruined Portal'
     case 'woodlandMansion':
       return 'Woodland Mansion'
+    case 'desertTemple':
+      return 'Desert Temple'
     default:
       return 'Village'
   }

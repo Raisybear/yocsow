@@ -74,6 +74,8 @@ static int cubiomes_structure(int32_t structure) {
       return Ruined_Portal;
     case YOCSOW_STRUCTURE_WOODLAND_MANSION:
       return Mansion;
+    case YOCSOW_STRUCTURE_DESERT_TEMPLE:
+      return Desert_Pyramid;
     default:
       return -1;
   }

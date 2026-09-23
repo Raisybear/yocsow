@@ -82,6 +82,7 @@ pub enum ProjectStructureType {
     Village,
     RuinedPortal,
     WoodlandMansion,
+    DesertTemple,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -532,6 +533,25 @@ mod tests {
     }
 
     #[test]
+    fn saves_and_loads_desert_temple_requirements() {
+        let path = test_path("desert-temple-search.yocsow");
+        let mut project = sample_project();
+        project
+            .search_requirements
+            .push(sample_desert_temple_requirement());
+
+        save_project(&path, &project).expect("project should be saved");
+
+        let contents = fs::read_to_string(&path).expect("saved project should be readable");
+        let loaded = load_project(&path).expect("project should be loaded");
+
+        assert!(contents.contains(r#""structureType": "desertTemple""#));
+        assert_eq!(loaded, project);
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
     fn migrates_version_one_projects() {
         let path = test_path("legacy.yocsow");
 
@@ -815,6 +835,15 @@ mod tests {
             structure_type: ProjectStructureType::WoodlandMansion,
             center: ProjectBlockPosition { x: 4096, z: -2048 },
             radius_blocks: 8_000,
+        }
+    }
+
+    fn sample_desert_temple_requirement() -> ProjectSearchRequirement {
+        ProjectSearchRequirement::Structure {
+            id: "temple-1".into(),
+            structure_type: ProjectStructureType::DesertTemple,
+            center: ProjectBlockPosition { x: 1600, z: -3200 },
+            radius_blocks: 5_000,
         }
     }
 
