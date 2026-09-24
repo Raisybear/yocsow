@@ -11,6 +11,14 @@ export const minecraftJavaReleaseCatalogPath = resolve(
   'minecraft-java-releases.json',
 )
 
+export const cubiomesVersionHeaderPath = resolve(
+  scriptDirectory,
+  '..',
+  'third_party',
+  'cubiomes',
+  'biomes.h',
+)
+
 function requireCondition(condition, message) {
   if (!condition) {
     throw new Error(`Invalid Minecraft Java release catalog: ${message}`)
@@ -94,6 +102,25 @@ function validateGenerationProfilePolicy(catalog, uniqueReleaseIds) {
       profile.releaseIds.includes(profile.representativeReleaseId),
       `verified profile ${profile.id} must contain its representative release`,
     )
+    requireCondition(
+      profile.backend !== null &&
+        typeof profile.backend === 'object' &&
+        !Array.isArray(profile.backend),
+      `verified profile ${profile.id} must declare a backend`,
+    )
+    requireCondition(
+      /^[a-z][a-z0-9-]*$/.test(profile.backend.provider),
+      `verified profile ${profile.id} has an invalid backend provider`,
+    )
+    requireCondition(
+      typeof profile.backend.version === 'string' &&
+        profile.backend.version.length > 0,
+      `verified profile ${profile.id} must declare a backend version`,
+    )
+    requireCondition(
+      ['supported', 'experimental'].includes(profile.backend.supportLevel),
+      `verified profile ${profile.id} has an invalid backend support level`,
+    )
 
     for (const releaseId of profile.releaseIds) {
       requireCondition(
@@ -107,6 +134,42 @@ function validateGenerationProfilePolicy(catalog, uniqueReleaseIds) {
       assignedReleaseIds.add(releaseId)
     }
   }
+}
+
+export function validateMinecraftJavaGenerationProfileBindings(
+  catalog,
+  cubiomesHeaderPath = cubiomesVersionHeaderPath,
+) {
+  validateMinecraftJavaReleaseCatalog(catalog)
+
+  const cubiomesHeader = readFileSync(cubiomesHeaderPath, 'utf8')
+  const availableCubiomesVersions = new Set(
+    cubiomesHeader.match(/\bMC_[A-Z0-9_]+\b/g) ?? [],
+  )
+  const backendBindings = new Set()
+
+  for (const profile of catalog.generationProfilePolicy.verifiedProfiles) {
+    const binding = `${profile.backend.provider}/${profile.backend.version}`
+
+    requireCondition(
+      !backendBindings.has(binding),
+      `backend binding ${binding} is assigned to more than one profile`,
+    )
+    backendBindings.add(binding)
+
+    if (profile.backend.provider === 'cubiomes') {
+      requireCondition(
+        /^MC_[A-Z0-9_]+$/.test(profile.backend.version),
+        `profile ${profile.id} has an invalid Cubiomes version symbol`,
+      )
+      requireCondition(
+        availableCubiomesVersions.has(profile.backend.version),
+        `profile ${profile.id} references missing Cubiomes version ${profile.backend.version}`,
+      )
+    }
+  }
+
+  return catalog
 }
 
 export function validateMinecraftJavaReleaseCatalog(catalog) {
@@ -212,6 +275,7 @@ export function createMinecraftJavaGenerationProfileIndex(catalog) {
       representativeReleaseId: profile.representativeReleaseId,
       releaseIds: Object.freeze([...profile.releaseIds]),
       verificationStatus: 'verified',
+      backend: Object.freeze({ ...profile.backend }),
     })
 
     for (const releaseId of profile.releaseIds) {
@@ -262,5 +326,5 @@ export function loadMinecraftJavaReleaseCatalog(
   catalogPath = minecraftJavaReleaseCatalogPath,
 ) {
   const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
-  return validateMinecraftJavaReleaseCatalog(catalog)
+  return validateMinecraftJavaGenerationProfileBindings(catalog)
 }

@@ -117,7 +117,258 @@
   ],
   "generationProfilePolicy": {
     "pendingProfilePrefix": "pending/java/",
-    "verifiedProfiles": []
+    "verifiedProfiles": [
+      {
+        "id": "cubiomes/java-1.21.3",
+        "representativeReleaseId": "1.21.3",
+        "releaseIds": ["1.21.3"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_21_3",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.21.1",
+        "representativeReleaseId": "1.21.1",
+        "releaseIds": ["1.21.1"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_21_1",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.20.6",
+        "representativeReleaseId": "1.20.6",
+        "releaseIds": ["1.20.6"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_20_6",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.19.4",
+        "representativeReleaseId": "1.19.4",
+        "releaseIds": ["1.19.4"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_19_4",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.19.2",
+        "representativeReleaseId": "1.19.2",
+        "releaseIds": ["1.19.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_19_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.18.2",
+        "representativeReleaseId": "1.18.2",
+        "releaseIds": ["1.18.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_18_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.17.1",
+        "representativeReleaseId": "1.17.1",
+        "releaseIds": ["1.17.1"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_17_1",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.16.5",
+        "representativeReleaseId": "1.16.5",
+        "releaseIds": ["1.16.5"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_16_5",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.16.1",
+        "representativeReleaseId": "1.16.1",
+        "releaseIds": ["1.16.1"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_16_1",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.15.2",
+        "representativeReleaseId": "1.15.2",
+        "releaseIds": ["1.15.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_15_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.14.4",
+        "representativeReleaseId": "1.14.4",
+        "releaseIds": ["1.14.4"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_14_4",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.13.2",
+        "representativeReleaseId": "1.13.2",
+        "releaseIds": ["1.13.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_13_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.12.2",
+        "representativeReleaseId": "1.12.2",
+        "releaseIds": ["1.12.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_12_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.11.2",
+        "representativeReleaseId": "1.11.2",
+        "releaseIds": ["1.11.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_11_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.10.2",
+        "representativeReleaseId": "1.10.2",
+        "releaseIds": ["1.10.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_10_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.9.4",
+        "representativeReleaseId": "1.9.4",
+        "releaseIds": ["1.9.4"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_9_4",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.8.9",
+        "representativeReleaseId": "1.8.9",
+        "releaseIds": ["1.8.9"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_8_9",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.7.10",
+        "representativeReleaseId": "1.7.10",
+        "releaseIds": ["1.7.10"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_7_10",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.6.4",
+        "representativeReleaseId": "1.6.4",
+        "releaseIds": ["1.6.4"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_6_4",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.5.2",
+        "representativeReleaseId": "1.5.2",
+        "releaseIds": ["1.5.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_5_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.4.7",
+        "representativeReleaseId": "1.4.7",
+        "releaseIds": ["1.4.7"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_4_7",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.3.2",
+        "representativeReleaseId": "1.3.2",
+        "releaseIds": ["1.3.2"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_3_2",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.2.5",
+        "representativeReleaseId": "1.2.5",
+        "releaseIds": ["1.2.5"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_2_5",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.1",
+        "representativeReleaseId": "1.1",
+        "releaseIds": ["1.1"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_1_0",
+          "supportLevel": "supported"
+        }
+      },
+      {
+        "id": "cubiomes/java-1.0.0",
+        "representativeReleaseId": "1.0.0",
+        "releaseIds": ["1.0.0"],
+        "backend": {
+          "provider": "cubiomes",
+          "version": "MC_1_0_0",
+          "supportLevel": "experimental"
+        }
+      }
+    ]
   },
   "sources": [
     {
