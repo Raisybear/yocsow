@@ -1,13 +1,15 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { open, save } from '@tauri-apps/plugin-dialog'
+import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
 import type { SearchRequirement } from '../domain/search-requirements'
 import type { SeedMapSettings } from '../domain/seed-map'
 
-export const PROJECT_FORMAT_VERSION = 5
+export const PROJECT_FORMAT_VERSION = 6
 
 export interface ProjectDocument {
   formatVersion: number
   name: string
+  minecraftVersion: MinecraftJavaReleaseId
   searchRequirements: SearchRequirement[]
   seedMap: SeedMapSettings
 }

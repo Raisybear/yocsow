@@ -5,12 +5,15 @@ use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::fs;
 use std::path::Path;
+use std::sync::OnceLock;
 
 const VERSION_ONE_PROJECT_FORMAT: u32 = 1;
 const VERSION_TWO_PROJECT_FORMAT: u32 = 2;
 const VERSION_THREE_PROJECT_FORMAT: u32 = 3;
 const VERSION_FOUR_PROJECT_FORMAT: u32 = 4;
-const PROJECT_FORMAT_VERSION: u32 = 5;
+const VERSION_FIVE_PROJECT_FORMAT: u32 = 5;
+const PROJECT_FORMAT_VERSION: u32 = 6;
+const DEFAULT_MINECRAFT_VERSION: &str = "1.21";
 const PROJECT_EXTENSION: &str = "yocsow";
 const MAX_PROJECT_FILE_SIZE: usize = 1024 * 1024;
 const MAX_PROJECT_NAME_LENGTH: usize = 120;
@@ -23,6 +26,7 @@ const MAX_SEARCH_RADIUS_BLOCKS: u64 = 60_000_000;
 pub struct ProjectDocument {
     format_version: u32,
     name: String,
+    minecraft_version: String,
     search_requirements: Vec<ProjectSearchRequirement>,
     seed_map: ProjectSeedMap,
 }
@@ -124,6 +128,7 @@ impl VersionOneProjectDocument {
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
+            minecraft_version: DEFAULT_MINECRAFT_VERSION.into(),
             search_requirements: Vec::new(),
             seed_map: ProjectSeedMap::default(),
         }
@@ -147,6 +152,7 @@ impl VersionTwoProjectDocument {
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
+            minecraft_version: DEFAULT_MINECRAFT_VERSION.into(),
             search_requirements: self.search_requirements,
             seed_map: ProjectSeedMap::default(),
         }
@@ -168,6 +174,7 @@ impl VersionThreeProjectDocument {
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
+            minecraft_version: DEFAULT_MINECRAFT_VERSION.into(),
             search_requirements: self.search_requirements,
             seed_map: ProjectSeedMap::default(),
         }
@@ -189,8 +196,32 @@ impl VersionFourProjectDocument {
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: self.name,
+            minecraft_version: DEFAULT_MINECRAFT_VERSION.into(),
             search_requirements: self.search_requirements,
             seed_map: ProjectSeedMap::default(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct VersionFiveProjectDocument {
+    format_version: u32,
+    name: String,
+    search_requirements: Vec<ProjectSearchRequirement>,
+    seed_map: ProjectSeedMap,
+}
+
+impl VersionFiveProjectDocument {
+    fn migrate(self) -> ProjectDocument {
+        debug_assert_eq!(self.format_version, VERSION_FIVE_PROJECT_FORMAT);
+
+        ProjectDocument {
+            format_version: PROJECT_FORMAT_VERSION,
+            name: self.name,
+            minecraft_version: DEFAULT_MINECRAFT_VERSION.into(),
+            search_requirements: self.search_requirements,
+            seed_map: self.seed_map,
         }
     }
 }
@@ -215,6 +246,13 @@ impl ProjectDocument {
         if trimmed_name.chars().count() > MAX_PROJECT_NAME_LENGTH {
             return Err(ProjectFileError::Validation(format!(
                 "project name must not exceed {MAX_PROJECT_NAME_LENGTH} characters"
+            )));
+        }
+
+        if !minecraft_java_release_ids().contains(&self.minecraft_version) {
+            return Err(ProjectFileError::Validation(format!(
+                "unknown Minecraft Java release: {}",
+                self.minecraft_version
             )));
         }
 
@@ -247,6 +285,30 @@ impl ProjectDocument {
 
         Ok(())
     }
+}
+
+fn minecraft_java_release_ids() -> &'static HashSet<String> {
+    static RELEASE_IDS: OnceLock<HashSet<String>> = OnceLock::new();
+
+    RELEASE_IDS.get_or_init(|| {
+        let catalog: Value = serde_json::from_str(include_str!(
+            "../../../../config/minecraft-java-releases.json"
+        ))
+        .expect("the checked-in Minecraft Java release catalog must be valid JSON");
+
+        catalog
+            .get("releaseIds")
+            .and_then(Value::as_array)
+            .expect("the checked-in Minecraft Java release catalog must contain releaseIds")
+            .iter()
+            .map(|release_id| {
+                release_id
+                    .as_str()
+                    .expect("Minecraft Java release IDs must be strings")
+                    .to_owned()
+            })
+            .collect()
+    })
 }
 
 impl ProjectSearchRequirement {
@@ -333,6 +395,10 @@ pub(crate) fn load_project(path: &Path) -> Result<ProjectDocument, ProjectFileEr
         }
         version if version == u64::from(VERSION_FOUR_PROJECT_FORMAT) => {
             let project: VersionFourProjectDocument = serde_json::from_value(value)?;
+            project.migrate()
+        }
+        version if version == u64::from(VERSION_FIVE_PROJECT_FORMAT) => {
+            let project: VersionFiveProjectDocument = serde_json::from_value(value)?;
             project.migrate()
         }
         version if version == u64::from(PROJECT_FORMAT_VERSION) => serde_json::from_value(value)?,
@@ -424,10 +490,11 @@ impl From<serde_json::Error> for ProjectFileError {
 #[cfg(test)]
 mod tests {
     use super::{
-        PROJECT_FORMAT_VERSION, ProjectBiomeSize, ProjectBiomeType, ProjectBlockPosition,
-        ProjectDocument, ProjectSearchRequirement, ProjectSeedMap, ProjectStructureType,
-        VERSION_FOUR_PROJECT_FORMAT, VERSION_ONE_PROJECT_FORMAT, VERSION_THREE_PROJECT_FORMAT,
-        VERSION_TWO_PROJECT_FORMAT, load_project, save_project,
+        DEFAULT_MINECRAFT_VERSION, PROJECT_FORMAT_VERSION, ProjectBiomeSize, ProjectBiomeType,
+        ProjectBlockPosition, ProjectDocument, ProjectSearchRequirement, ProjectSeedMap,
+        ProjectStructureType, VERSION_FIVE_PROJECT_FORMAT, VERSION_FOUR_PROJECT_FORMAT,
+        VERSION_ONE_PROJECT_FORMAT, VERSION_THREE_PROJECT_FORMAT, VERSION_TWO_PROJECT_FORMAT,
+        load_project, save_project,
     };
     use std::fs;
     use std::path::{Path, PathBuf};
@@ -446,7 +513,8 @@ mod tests {
         let loaded = load_project(&path).expect("project should be loaded");
 
         assert!(contents.ends_with('\n'));
-        assert!(contents.contains(r#""formatVersion": 5"#));
+        assert!(contents.contains(r#""formatVersion": 6"#));
+        assert!(contents.contains(r#""minecraftVersion": "1.21""#));
         assert!(!contents.contains(r#""seedRange""#));
         assert!(contents.contains(r#""searchRequirements": []"#));
         assert!(contents.contains(r#""visible": true"#));
@@ -575,6 +643,7 @@ mod tests {
 
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
         assert_eq!(migrated.name, "Legacy world");
+        assert_eq!(migrated.minecraft_version, DEFAULT_MINECRAFT_VERSION);
         assert!(migrated.search_requirements.is_empty());
         assert_eq!(migrated.seed_map, ProjectSeedMap::default());
 
@@ -612,6 +681,7 @@ mod tests {
 
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
         assert_eq!(migrated.name, "Village search");
+        assert_eq!(migrated.minecraft_version, DEFAULT_MINECRAFT_VERSION);
         assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
         assert_eq!(migrated.seed_map, ProjectSeedMap::default());
 
@@ -643,6 +713,7 @@ mod tests {
         let migrated = load_project(&path).expect("version three project should be migrated");
 
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.minecraft_version, DEFAULT_MINECRAFT_VERSION);
         assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
         assert_eq!(migrated.seed_map, ProjectSeedMap::default());
 
@@ -674,8 +745,44 @@ mod tests {
         let migrated = load_project(&path).expect("version four project should be migrated");
 
         assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.minecraft_version, DEFAULT_MINECRAFT_VERSION);
         assert_eq!(migrated.search_requirements, vec![sample_requirement()]);
         assert_eq!(migrated.seed_map, ProjectSeedMap::default());
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
+    fn migrates_version_five_projects_and_keeps_seed_map_settings() {
+        let path = test_path("version-five.yocsow");
+
+        fs::write(
+            &path,
+            format!(
+                r#"{{
+                  "formatVersion": {VERSION_FIVE_PROJECT_FORMAT},
+                  "name": "Existing seed map",
+                  "searchRequirements": [],
+                  "seedMap": {{
+                    "visible": true,
+                    "seed": "12345"
+                  }}
+                }}"#
+            ),
+        )
+        .expect("version five project should be written");
+
+        let migrated = load_project(&path).expect("version five project should be migrated");
+
+        assert_eq!(migrated.format_version, PROJECT_FORMAT_VERSION);
+        assert_eq!(migrated.minecraft_version, DEFAULT_MINECRAFT_VERSION);
+        assert_eq!(
+            migrated.seed_map,
+            ProjectSeedMap {
+                visible: true,
+                seed: "12345".into(),
+            }
+        );
 
         remove_test_directory(&path);
     }
@@ -738,6 +845,24 @@ mod tests {
     }
 
     #[test]
+    fn rejects_unknown_minecraft_versions() {
+        let path = test_path("unknown-minecraft-version.yocsow");
+        let mut project = sample_project();
+        project.minecraft_version = "1.21-fabric".into();
+
+        let error = save_project(&path, &project)
+            .expect_err("unknown Minecraft versions should be rejected");
+
+        assert!(
+            error
+                .to_string()
+                .contains("unknown Minecraft Java release: 1.21-fabric")
+        );
+
+        remove_test_directory(&path);
+    }
+
+    #[test]
     fn rejects_duplicate_search_requirement_identifiers() {
         let path = test_path("duplicate-requirements.yocsow");
         let mut project = sample_project();
@@ -794,6 +919,7 @@ mod tests {
         ProjectDocument {
             format_version: PROJECT_FORMAT_VERSION,
             name: "Example world".into(),
+            minecraft_version: DEFAULT_MINECRAFT_VERSION.into(),
             search_requirements: Vec::new(),
             seed_map: ProjectSeedMap {
                 visible: true,

@@ -127,13 +127,17 @@ test('checks frontend consumers when the Minecraft catalog changes', () => {
     'frontend-lint',
     'frontend-typecheck',
     'frontend-test-related',
+    'rust-format',
+    'rust-lint',
+    'rust-test-project_files',
   ])
-  assert.deepEqual(plan.steps.at(-1).args, [
+  assert.deepEqual(plan.steps.at(-4).args, [
     'run',
     'test:related',
     '--',
     'src/domain/minecraft-version.ts',
   ])
+  assert.equal(plan.steps.at(-1).args.at(-1), 'project_files')
 })
 
 test('uses full verification when requested', () => {
