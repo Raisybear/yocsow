@@ -88,3 +88,7 @@ When adding a new source area or build system, update
 `scripts/check-changed.mjs` in the same change. Add a selection test to
 `scripts/check-changed.test.mjs`, and keep unknown paths mapped to the full
 verification until a narrower dependency boundary is proven safe.
+
+Minecraft release catalog maintenance has its own offline-capable workflow in
+[`minecraft-version-catalog.md`](minecraft-version-catalog.md). Catalog and
+updater changes run their focused contract tests through `check:changed`.

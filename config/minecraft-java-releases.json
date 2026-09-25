@@ -112,6 +112,13 @@
   "launcherAliases": {
     "1.0.0": "1.0"
   },
+  "launcherManifestExceptions": [
+    "1.5",
+    "1.0.1"
+  ],
+  "launcherManifestExclusions": [
+    "1.7.3"
+  ],
   "serverOnlyReleaseIds": [
     "1.0.1"
   ],

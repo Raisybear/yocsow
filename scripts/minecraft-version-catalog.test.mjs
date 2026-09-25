@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import './minecraft-version-catalog-update.test.mjs'
 import {
   createMinecraftJavaGenerationProfileIndex,
   loadMinecraftJavaReleaseCatalog,
@@ -29,6 +30,8 @@ test('loads every Java full release through 26.3', () => {
 
   assert.ok(catalog.releaseIds.includes('1.5'))
   assert.equal(catalog.launcherAliases['1.0.0'], '1.0')
+  assert.deepEqual(catalog.launcherManifestExceptions, ['1.5', '1.0.1'])
+  assert.deepEqual(catalog.launcherManifestExclusions, ['1.7.3'])
   assert.deepEqual(catalog.serverOnlyReleaseIds, ['1.0.1'])
 
   for (const developmentVersion of [

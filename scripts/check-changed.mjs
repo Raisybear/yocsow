@@ -73,7 +73,9 @@ function classifyFile(state, rawFilePath) {
   if (
     filePath === 'config/minecraft-java-releases.json' ||
     filePath === 'scripts/minecraft-version-catalog.mjs' ||
-    filePath === 'scripts/minecraft-version-catalog.test.mjs'
+    filePath === 'scripts/minecraft-version-catalog.test.mjs' ||
+    filePath === 'scripts/minecraft-version-catalog-update.test.mjs' ||
+    filePath === 'scripts/update-minecraft-version-catalog.mjs'
   ) {
     state.minecraftVersionCatalog = true
     return

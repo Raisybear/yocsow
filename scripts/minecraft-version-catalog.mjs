@@ -223,6 +223,41 @@ export function validateMinecraftJavaReleaseCatalog(catalog) {
   }
 
   requireCondition(
+    Array.isArray(catalog.launcherManifestExceptions),
+    'launcherManifestExceptions must be an array',
+  )
+  requireCondition(
+    new Set(catalog.launcherManifestExceptions).size ===
+      catalog.launcherManifestExceptions.length,
+    'launcherManifestExceptions must not contain duplicates',
+  )
+
+  for (const releaseId of catalog.launcherManifestExceptions) {
+    requireCondition(
+      uniqueReleaseIds.has(releaseId),
+      `launcher manifest exception references unknown release ${releaseId}`,
+    )
+  }
+
+  requireCondition(
+    Array.isArray(catalog.launcherManifestExclusions),
+    'launcherManifestExclusions must be an array',
+  )
+  requireCondition(
+    new Set(catalog.launcherManifestExclusions).size ===
+      catalog.launcherManifestExclusions.length,
+    'launcherManifestExclusions must not contain duplicates',
+  )
+
+  for (const releaseId of catalog.launcherManifestExclusions) {
+    numericParts(releaseId)
+    requireCondition(
+      !uniqueReleaseIds.has(releaseId),
+      `launcher manifest exclusion is also a catalog release ${releaseId}`,
+    )
+  }
+
+  requireCondition(
     Array.isArray(catalog.serverOnlyReleaseIds),
     'serverOnlyReleaseIds must be an array',
   )
