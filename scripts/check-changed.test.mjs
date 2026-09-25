@@ -114,7 +114,7 @@ test('runs the selector tests when development tooling changes', () => {
   ])
 })
 
-test('runs only the catalog checks for Minecraft release catalog changes', () => {
+test('checks frontend consumers when the Minecraft catalog changes', () => {
   const plan = createCheckPlan([
     'config/minecraft-java-releases.json',
     'scripts/minecraft-version-catalog.mjs',
@@ -124,6 +124,15 @@ test('runs only the catalog checks for Minecraft release catalog changes', () =>
     'whitespace-working',
     'whitespace-staged',
     'minecraft-version-catalog-test',
+    'frontend-lint',
+    'frontend-typecheck',
+    'frontend-test-related',
+  ])
+  assert.deepEqual(plan.steps.at(-1).args, [
+    'run',
+    'test:related',
+    '--',
+    'src/domain/minecraft-version.ts',
   ])
 })
 
