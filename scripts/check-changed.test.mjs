@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createCheckPlan } from './check-changed.mjs'
+import './minecraft-version-catalog.test.mjs'
 
 function stepIds(plan) {
   return plan.steps.map((step) => step.id)
@@ -110,6 +111,19 @@ test('runs the selector tests when development tooling changes', () => {
     'whitespace-working',
     'whitespace-staged',
     'tooling-test',
+  ])
+})
+
+test('runs only the catalog checks for Minecraft release catalog changes', () => {
+  const plan = createCheckPlan([
+    'config/minecraft-java-releases.json',
+    'scripts/minecraft-version-catalog.mjs',
+  ])
+
+  assert.deepEqual(stepIds(plan), [
+    'whitespace-working',
+    'whitespace-staged',
+    'minecraft-version-catalog-test',
   ])
 })
 
