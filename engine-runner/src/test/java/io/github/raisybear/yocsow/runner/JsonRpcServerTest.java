@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.raisybear.yocsow.engine.search.BlockPosition;
+import io.github.raisybear.yocsow.engine.search.MinecraftVersion;
 import io.github.raisybear.yocsow.engine.search.StructureType;
 import io.github.raisybear.yocsow.engine.search.seed.SeedSearchService;
 import io.github.raisybear.yocsow.engine.search.structure.StructureLocator;
@@ -118,6 +119,22 @@ class JsonRpcServerTest {
 
     assertEquals(10, third.get("seed").longValue());
     assertEquals(900, third.at("/matches/0/actualPosition/x").longValue());
+  }
+
+  @Test
+  void preservesExactMinecraftReleaseThroughTheProtocol() throws IOException {
+    RecordingVillageLocator locator = new RecordingVillageLocator();
+    String input =
+        """
+        {"jsonrpc":"2.0","id":1,"method":"engine.initialize","params":{"protocolVersion":1}}
+        {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":10,"seedCount":1,"minecraftVersion":"1.20.6","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        """;
+
+    List<JsonNode> responses = serve(input, serviceUsing(locator));
+
+    assertEquals(2, responses.size());
+    assertEquals(1, responses.get(1).at("/result/searchedSeedCount").intValue());
+    assertEquals("1.20.6", locator.lastMinecraftVersion.identifier());
   }
 
   @Test
@@ -240,7 +257,7 @@ class JsonRpcServerTest {
         {"jsonrpc":"2.0","id":1,"method":"seed.search"}
         {"jsonrpc":"2.0","id":2,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[]}}
         {"jsonrpc":"2.0","id":3,"method":"seed.search","params":{"firstSeed":0,"seedCount":"1","minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
-        {"jsonrpc":"2.0","id":4,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.20","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
+        {"jsonrpc":"2.0","id":4,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.20-fabric","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
         {"jsonrpc":"2.0","id":5,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"bastion","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
         {"jsonrpc":"2.0","id":6,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1,"extra":true}}
         {"jsonrpc":"2.0","id":7,"method":"seed.search","params":{"firstSeed":0,"seedCount":1,"minecraftVersion":"1.21","requirements":[{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000},{"id":"village-1","structureType":"village","center":{"x":0,"z":0},"radiusBlocks":1000}],"resultLimit":1}}
@@ -257,7 +274,8 @@ class JsonRpcServerTest {
     }
 
     assertEquals(
-        "unsupported Minecraft version: 1.20", responses.get(4).at("/error/message").stringValue());
+        "invalid Minecraft Java release: 1.20-fabric",
+        responses.get(4).at("/error/message").stringValue());
     assertEquals(
         "unsupported structure type: bastion", responses.get(5).at("/error/message").stringValue());
     assertEquals(
@@ -397,6 +415,7 @@ class JsonRpcServerTest {
   private static final class RecordingVillageLocator implements StructureLocator {
 
     private final Map<SearchKey, List<BlockPosition>> positions = new HashMap<>();
+    private MinecraftVersion lastMinecraftVersion;
 
     void locate(long seed, BlockPosition position) {
       positions
@@ -417,6 +436,8 @@ class JsonRpcServerTest {
 
     @Override
     public List<BlockPosition> findNearestCandidates(StructureSearchRequest request, int limit) {
+      lastMinecraftVersion = request.minecraftVersion();
+
       return positions
           .getOrDefault(
               new SearchKey(

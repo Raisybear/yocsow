@@ -199,9 +199,12 @@ public final class CubiomesStructureLocator implements StructureLocator {
   }
 
   private int nativeMinecraftVersion(MinecraftVersion minecraftVersion) {
-    return switch (minecraftVersion) {
-      case JAVA_1_21 -> NATIVE_JAVA_1_21;
-    };
+    if (MinecraftVersion.JAVA_1_21.equals(minecraftVersion)) {
+      return NATIVE_JAVA_1_21;
+    }
+
+    throw new IllegalArgumentException(
+        "unsupported Minecraft version: " + minecraftVersion.identifier());
   }
 
   private void requireSuccessfulStatus(int status, MinecraftVersion minecraftVersion) {

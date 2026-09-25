@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
 import type {
   BiomeType,
   SearchRequirement,
@@ -30,7 +31,7 @@ export interface SeedSearchRequirement {
 
 export interface SeedSearchRequest {
   firstSeed: string
-  minecraftVersion: '1.21'
+  minecraftVersion: MinecraftJavaReleaseId
   requirements: SeedSearchRequirement[]
   resultLimit: number
 }
@@ -93,6 +94,7 @@ export function createRandomSearchStart(): bigint {
 
 export function createSeedSearchRequest(
   firstSeed: bigint,
+  minecraftVersion: MinecraftJavaReleaseId,
   requirements: SearchRequirement[],
   resultLimit: number,
 ): SeedSearchRequest {
@@ -113,7 +115,7 @@ export function createSeedSearchRequest(
 
   return {
     firstSeed: firstSeed.toString(),
-    minecraftVersion: '1.21',
+    minecraftVersion,
     requirements: requirements.map((requirement) => ({
       id: requirement.id,
       structureType:

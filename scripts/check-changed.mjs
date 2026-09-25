@@ -80,6 +80,7 @@ function classifyFile(state, rawFilePath) {
     state.minecraftVersionCatalog = true
     if (filePath === 'config/minecraft-java-releases.json') {
       state.frontendSources.add('src/domain/minecraft-version.ts')
+      state.rustFilters.add('minecraft_version')
       state.rustFilters.add('project_files')
     }
     return

@@ -129,14 +129,16 @@ test('checks frontend consumers when the Minecraft catalog changes', () => {
     'frontend-test-related',
     'rust-format',
     'rust-lint',
+    'rust-test-minecraft_version',
     'rust-test-project_files',
   ])
-  assert.deepEqual(plan.steps.at(-4).args, [
+  assert.deepEqual(plan.steps.at(-5).args, [
     'run',
     'test:related',
     '--',
     'src/domain/minecraft-version.ts',
   ])
+  assert.equal(plan.steps.at(-2).args.at(-1), 'minecraft_version')
   assert.equal(plan.steps.at(-1).args.at(-1), 'project_files')
 })
 

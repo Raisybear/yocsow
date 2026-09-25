@@ -90,6 +90,7 @@ function App() {
               hidden={activeView !== 'seed-finder'}
             >
               <SeedFinderWorkspace
+                minecraftVersion={workspace.project.minecraftVersion}
                 requirements={workspace.project.searchRequirements}
                 onRequirementsChange={
                   workspace.updateSearchRequirements

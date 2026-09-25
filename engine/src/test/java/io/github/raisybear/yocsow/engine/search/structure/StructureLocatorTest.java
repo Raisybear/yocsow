@@ -65,15 +65,16 @@ class StructureLocatorTest {
   @Test
   void resolvesMinecraftVersionsByStableIdentifier() {
     assertEquals(MinecraftVersion.JAVA_1_21, MinecraftVersion.fromIdentifier("1.21"));
+    assertEquals("1.20.6", MinecraftVersion.fromIdentifier("1.20.6").identifier());
   }
 
   @Test
-  void rejectsUnsupportedMinecraftVersions() {
+  void rejectsInvalidMinecraftReleaseIdentifiers() {
     IllegalArgumentException error =
         assertThrows(
-            IllegalArgumentException.class, () -> MinecraftVersion.fromIdentifier("1.20.1"));
+            IllegalArgumentException.class, () -> MinecraftVersion.fromIdentifier("1.20.6-fabric"));
 
-    assertEquals("unsupported Minecraft version: 1.20.1", error.getMessage());
+    assertEquals("invalid Minecraft Java release: 1.20.6-fabric", error.getMessage());
   }
 
   @Test
