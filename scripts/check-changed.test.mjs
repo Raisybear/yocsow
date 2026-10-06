@@ -114,7 +114,7 @@ test('runs the selector tests when development tooling changes', () => {
   ])
 })
 
-test('checks frontend consumers when the Minecraft catalog changes', () => {
+test('checks every runtime consumer when the Minecraft catalog changes', () => {
   const plan = createCheckPlan([
     'config/minecraft-java-releases.json',
     'scripts/minecraft-version-catalog.mjs',
@@ -124,15 +124,19 @@ test('checks frontend consumers when the Minecraft catalog changes', () => {
     'whitespace-working',
     'whitespace-staged',
     'minecraft-version-catalog-test',
+    'native-configure',
+    'native-build',
+    'native-test',
     'frontend-lint',
     'frontend-typecheck',
     'frontend-test-related',
+    'java-check',
     'rust-format',
     'rust-lint',
     'rust-test-minecraft_version',
     'rust-test-project_files',
   ])
-  assert.deepEqual(plan.steps.at(-5).args, [
+  assert.deepEqual(plan.steps.at(-6).args, [
     'run',
     'test:related',
     '--',

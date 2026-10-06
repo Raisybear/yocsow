@@ -17,7 +17,6 @@ import java.util.Optional;
 /** Locates configurable overworld structures through the shared Cubiomes batch boundary. */
 public final class CubiomesStructureLocator implements StructureLocator {
 
-  private static final int NATIVE_JAVA_1_21 = 1;
   private static final int NATIVE_RUINED_PORTAL = 2;
   private static final int NATIVE_WOODLAND_MANSION = 3;
   private static final int NATIVE_DESERT_TEMPLE = 4;
@@ -199,12 +198,7 @@ public final class CubiomesStructureLocator implements StructureLocator {
   }
 
   private int nativeMinecraftVersion(MinecraftVersion minecraftVersion) {
-    if (MinecraftVersion.JAVA_1_21.equals(minecraftVersion)) {
-      return NATIVE_JAVA_1_21;
-    }
-
-    throw new IllegalArgumentException(
-        "unsupported Minecraft version: " + minecraftVersion.identifier());
+    return CubiomesGenerationProfile.resolve(minecraftVersion).nativeVersion();
   }
 
   private void requireSuccessfulStatus(int status, MinecraftVersion minecraftVersion) {

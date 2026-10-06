@@ -82,6 +82,8 @@ function classifyFile(state, rawFilePath) {
       state.frontendSources.add('src/domain/minecraft-version.ts')
       state.rustFilters.add('minecraft_version')
       state.rustFilters.add('project_files')
+      state.native = true
+      state.javaModules.add('engine')
     }
     return
   }

@@ -35,8 +35,11 @@ describe('Minecraft Java release contract', () => {
     const verifiedRelease = getMinecraftJavaRelease(
       requireMinecraftJavaReleaseId('1.21.1'),
     )
-    const pendingRelease = getMinecraftJavaRelease(
+    const sharedRelease = getMinecraftJavaRelease(
       requireMinecraftJavaReleaseId('1.21'),
+    )
+    const pendingRelease = getMinecraftJavaRelease(
+      requireMinecraftJavaReleaseId('1.20.5'),
     )
 
     expect(verifiedRelease.generationProfile).toEqual({
@@ -49,10 +52,13 @@ describe('Minecraft Java release contract', () => {
         supportLevel: 'supported',
       },
     })
+    expect(sharedRelease.generationProfile).toBe(
+      verifiedRelease.generationProfile,
+    )
     expect(pendingRelease.generationProfile).toEqual({
       status: 'pending',
-      id: 'pending/java/1.21',
-      representativeReleaseId: '1.21',
+      id: 'pending/java/1.20.5',
+      representativeReleaseId: '1.20.5',
     })
   })
 

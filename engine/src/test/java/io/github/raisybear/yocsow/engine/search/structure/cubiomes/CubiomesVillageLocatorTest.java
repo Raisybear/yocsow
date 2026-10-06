@@ -43,7 +43,7 @@ class CubiomesVillageLocatorTest {
             "village-native-test", StructureType.VILLAGE, new BlockPosition(0, 0), 1_000);
 
     StructureSearchRequest request =
-        new StructureSearchRequest(42, MinecraftVersion.JAVA_1_21, requirement);
+        new StructureSearchRequest(42, MinecraftVersion.fromIdentifier("1.21.3"), requirement);
 
     assertEquals(Optional.of(new BlockPosition(656, -304)), locator.findNearest(request));
   }
@@ -131,10 +131,14 @@ class CubiomesVillageLocatorTest {
 
     CubiomesVillageLocator locator = new CubiomesVillageLocator(nativeLibrary);
 
-    List<BlockPosition> result = locator.findNearestCandidates(villageRequest(), 2);
+    StructureSearchRequest request =
+        new StructureSearchRequest(
+            42, MinecraftVersion.fromIdentifier("1.21.3"), villageRequest().requirement());
+
+    List<BlockPosition> result = locator.findNearestCandidates(request, 2);
 
     assertEquals(nativeLibrary.positions, result);
-    assertEquals(1, nativeLibrary.minecraftVersion);
+    assertEquals(2, nativeLibrary.minecraftVersion);
     assertEquals(42, nativeLibrary.seed);
     assertEquals(100, nativeLibrary.centerX);
     assertEquals(-200, nativeLibrary.centerZ);

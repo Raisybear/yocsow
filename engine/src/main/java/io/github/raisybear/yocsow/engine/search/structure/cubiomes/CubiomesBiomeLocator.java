@@ -17,7 +17,6 @@ import java.util.Optional;
 /** Native Cubiomes-backed locator for point-and-extent biome requirements. */
 public final class CubiomesBiomeLocator implements StructureLocator {
 
-  private static final int NATIVE_JAVA_1_21 = 1;
   private static final int NATIVE_TAIGA = 1;
   private static final int MAXIMUM_BATCH_SEEDS = 10_000;
   private static final int MAXIMUM_SEARCH_AREAS = 32;
@@ -151,12 +150,7 @@ public final class CubiomesBiomeLocator implements StructureLocator {
   }
 
   private int nativeMinecraftVersion(MinecraftVersion minecraftVersion) {
-    if (MinecraftVersion.JAVA_1_21.equals(minecraftVersion)) {
-      return NATIVE_JAVA_1_21;
-    }
-
-    throw new IllegalArgumentException(
-        "unsupported Minecraft version: " + minecraftVersion.identifier());
+    return CubiomesGenerationProfile.resolve(minecraftVersion).nativeVersion();
   }
 
   private void requireSuccessfulStatus(int status, MinecraftVersion minecraftVersion) {

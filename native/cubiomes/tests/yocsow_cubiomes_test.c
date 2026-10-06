@@ -809,6 +809,58 @@ static void rejects_unsupported_versions(void) {
       status);
 }
 
+static void accepts_all_declared_generation_profiles(void) {
+  const int32_t versions[] = {
+      YOCSOW_CUBIOMES_MC_1_21_3,
+      YOCSOW_CUBIOMES_MC_1_21_1,
+      YOCSOW_CUBIOMES_MC_1_20_6,
+      YOCSOW_CUBIOMES_MC_1_19_4,
+      YOCSOW_CUBIOMES_MC_1_19_2,
+      YOCSOW_CUBIOMES_MC_1_18_2,
+      YOCSOW_CUBIOMES_MC_1_17_1,
+      YOCSOW_CUBIOMES_MC_1_16_5,
+      YOCSOW_CUBIOMES_MC_1_16_1,
+      YOCSOW_CUBIOMES_MC_1_15_2,
+      YOCSOW_CUBIOMES_MC_1_14_4,
+      YOCSOW_CUBIOMES_MC_1_13_2,
+      YOCSOW_CUBIOMES_MC_1_12_2,
+      YOCSOW_CUBIOMES_MC_1_11_2,
+      YOCSOW_CUBIOMES_MC_1_10_2,
+      YOCSOW_CUBIOMES_MC_1_9_4,
+      YOCSOW_CUBIOMES_MC_1_8_9,
+      YOCSOW_CUBIOMES_MC_1_7_10,
+      YOCSOW_CUBIOMES_MC_1_6_4,
+      YOCSOW_CUBIOMES_MC_1_5_2,
+      YOCSOW_CUBIOMES_MC_1_4_7,
+      YOCSOW_CUBIOMES_MC_1_3_2,
+      YOCSOW_CUBIOMES_MC_1_2_5,
+      YOCSOW_CUBIOMES_MC_1_1_0,
+      YOCSOW_CUBIOMES_MC_1_0_0};
+
+  for (int32_t index = 0;
+       index < (int32_t)(sizeof(versions) / sizeof(versions[0]));
+       index++) {
+    int32_t result_count = 0;
+    struct YocsowBlockPosition result;
+
+    int32_t status =
+        yocsow_find_villages(
+            versions[index],
+            42,
+            0,
+            0,
+            1,
+            1,
+            &result_count,
+            &result);
+
+    expect_equal(
+        "declared generation profile status",
+        YOCSOW_CUBIOMES_OK,
+        status);
+  }
+}
+
 static void finds_ruined_portals_through_generic_structure_search(void) {
   int32_t result_count = 0;
   struct YocsowBlockPosition results[4];
@@ -993,6 +1045,7 @@ int main(void) {
   finds_woodland_mansions_through_generic_structure_search();
   finds_desert_temples_through_generic_structure_search();
   rejects_unknown_generic_structure_types();
+  accepts_all_declared_generation_profiles();
   rejects_unsupported_versions();
   rejects_invalid_radii();
   rejects_searches_outside_world_border();

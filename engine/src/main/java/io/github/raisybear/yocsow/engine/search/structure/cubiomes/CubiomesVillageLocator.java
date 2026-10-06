@@ -24,7 +24,6 @@ import java.util.Set;
 
 public final class CubiomesVillageLocator implements StructureLocator, SeedSearchKernel {
 
-  private static final int NATIVE_JAVA_1_21 = 1;
   private static final int MAXIMUM_BATCH_SEEDS = 10_000;
   private static final int MAXIMUM_SEARCH_AREAS = 32;
   private static final int MAXIMUM_RESULTS = 64;
@@ -265,12 +264,7 @@ public final class CubiomesVillageLocator implements StructureLocator, SeedSearc
   }
 
   private int nativeMinecraftVersion(MinecraftVersion minecraftVersion) {
-    if (MinecraftVersion.JAVA_1_21.equals(minecraftVersion)) {
-      return NATIVE_JAVA_1_21;
-    }
-
-    throw new IllegalArgumentException(
-        "unsupported Minecraft version: " + minecraftVersion.identifier());
+    return CubiomesGenerationProfile.resolve(minecraftVersion).nativeVersion();
   }
 
   private void requireSuccessfulStatus(int status, MinecraftVersion minecraftVersion) {

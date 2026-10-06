@@ -19,6 +19,15 @@ export const cubiomesVersionHeaderPath = resolve(
   'biomes.h',
 )
 
+export const yocsowCubiomesVersionHeaderPath = resolve(
+  scriptDirectory,
+  '..',
+  'native',
+  'cubiomes',
+  'include',
+  'yocsow_cubiomes.h',
+)
+
 function requireCondition(condition, message) {
   if (!condition) {
     throw new Error(`Invalid Minecraft Java release catalog: ${message}`)
@@ -139,12 +148,17 @@ function validateGenerationProfilePolicy(catalog, uniqueReleaseIds) {
 export function validateMinecraftJavaGenerationProfileBindings(
   catalog,
   cubiomesHeaderPath = cubiomesVersionHeaderPath,
+  yocsowCubiomesHeaderPath = yocsowCubiomesVersionHeaderPath,
 ) {
   validateMinecraftJavaReleaseCatalog(catalog)
 
   const cubiomesHeader = readFileSync(cubiomesHeaderPath, 'utf8')
   const availableCubiomesVersions = new Set(
     cubiomesHeader.match(/\bMC_[A-Z0-9_]+\b/g) ?? [],
+  )
+  const yocsowCubiomesHeader = readFileSync(yocsowCubiomesHeaderPath, 'utf8')
+  const exposedCubiomesVersions = new Set(
+    yocsowCubiomesHeader.match(/\bYOCSOW_CUBIOMES_MC_[A-Z0-9_]+\b/g) ?? [],
   )
   const backendBindings = new Set()
 
@@ -165,6 +179,12 @@ export function validateMinecraftJavaGenerationProfileBindings(
       requireCondition(
         availableCubiomesVersions.has(profile.backend.version),
         `profile ${profile.id} references missing Cubiomes version ${profile.backend.version}`,
+      )
+      requireCondition(
+        exposedCubiomesVersions.has(
+          `YOCSOW_CUBIOMES_${profile.backend.version}`,
+        ),
+        `native wrapper does not expose Cubiomes version ${profile.backend.version}`,
       )
     }
   }
