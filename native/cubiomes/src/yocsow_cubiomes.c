@@ -11,8 +11,56 @@
 static int cubiomes_version(
     int32_t minecraft_version) {
   switch (minecraft_version) {
-    case YOCSOW_MC_JAVA_1_21:
+    case YOCSOW_CUBIOMES_MC_1_21_1:
       return MC_1_21_1;
+    case YOCSOW_CUBIOMES_MC_1_21_3:
+      return MC_1_21_3;
+    case YOCSOW_CUBIOMES_MC_1_20_6:
+      return MC_1_20_6;
+    case YOCSOW_CUBIOMES_MC_1_19_4:
+      return MC_1_19_4;
+    case YOCSOW_CUBIOMES_MC_1_19_2:
+      return MC_1_19_2;
+    case YOCSOW_CUBIOMES_MC_1_18_2:
+      return MC_1_18_2;
+    case YOCSOW_CUBIOMES_MC_1_17_1:
+      return MC_1_17_1;
+    case YOCSOW_CUBIOMES_MC_1_16_5:
+      return MC_1_16_5;
+    case YOCSOW_CUBIOMES_MC_1_16_1:
+      return MC_1_16_1;
+    case YOCSOW_CUBIOMES_MC_1_15_2:
+      return MC_1_15_2;
+    case YOCSOW_CUBIOMES_MC_1_14_4:
+      return MC_1_14_4;
+    case YOCSOW_CUBIOMES_MC_1_13_2:
+      return MC_1_13_2;
+    case YOCSOW_CUBIOMES_MC_1_12_2:
+      return MC_1_12_2;
+    case YOCSOW_CUBIOMES_MC_1_11_2:
+      return MC_1_11_2;
+    case YOCSOW_CUBIOMES_MC_1_10_2:
+      return MC_1_10_2;
+    case YOCSOW_CUBIOMES_MC_1_9_4:
+      return MC_1_9_4;
+    case YOCSOW_CUBIOMES_MC_1_8_9:
+      return MC_1_8_9;
+    case YOCSOW_CUBIOMES_MC_1_7_10:
+      return MC_1_7_10;
+    case YOCSOW_CUBIOMES_MC_1_6_4:
+      return MC_1_6_4;
+    case YOCSOW_CUBIOMES_MC_1_5_2:
+      return MC_1_5_2;
+    case YOCSOW_CUBIOMES_MC_1_4_7:
+      return MC_1_4_7;
+    case YOCSOW_CUBIOMES_MC_1_3_2:
+      return MC_1_3_2;
+    case YOCSOW_CUBIOMES_MC_1_2_5:
+      return MC_1_2_5;
+    case YOCSOW_CUBIOMES_MC_1_1_0:
+      return MC_1_1_0;
+    case YOCSOW_CUBIOMES_MC_1_0_0:
+      return MC_1_0_0;
     default:
       return MC_UNDEF;
   }

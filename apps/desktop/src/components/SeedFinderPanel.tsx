@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
 import type { SearchRequirement } from '../domain/search-requirements'
 import {
   createRandomSearchStart,
@@ -31,6 +32,7 @@ interface SearchSession {
 }
 
 interface SeedFinderPanelProps {
+  minecraftVersion: MinecraftJavaReleaseId
   requirements: SearchRequirement[]
   resultLimit?: string
   onResultLimitChange?: (resultLimit: string) => void
@@ -49,10 +51,12 @@ function errorMessage(error: unknown): string {
 }
 
 function requestFingerprint(
+  minecraftVersion: MinecraftJavaReleaseId,
   requirements: SearchRequirement[],
   resultLimit: string,
 ): string {
   return JSON.stringify({
+    minecraftVersion,
     requirements,
     resultLimit,
   })
@@ -81,6 +85,7 @@ function parseResultLimit(value: string): number {
 }
 
 export function SeedFinderPanel({
+  minecraftVersion,
   requirements,
   resultLimit: controlledResultLimit,
   onResultLimitChange,
@@ -104,6 +109,7 @@ export function SeedFinderPanel({
   }
 
   const fingerprint = requestFingerprint(
+    minecraftVersion,
     requirements,
     resultLimit,
   )
@@ -171,6 +177,7 @@ export function SeedFinderPanel({
       const result = await searchSeedBatches(
         createSeedSearchRequest(
           createRandomSearchStart(),
+          minecraftVersion,
           requirements,
           parsedResultLimit,
         ),

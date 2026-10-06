@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { requireMinecraftJavaReleaseId } from '../domain/minecraft-version'
 import type { SearchRequirement } from '../domain/search-requirements'
 import { createSeedSearchRequest } from './seed-search'
 
@@ -11,17 +12,19 @@ const requirements: SearchRequirement[] = [
     radiusBlocks: 1_000,
   },
 ]
+const defaultMinecraftVersion = requireMinecraftJavaReleaseId('1.21')
 
 describe('continuous seed search request', () => {
   it('serializes the search start and requirements for Rust', () => {
     const request = createSeedSearchRequest(
       BigInt(-25_000),
+      requireMinecraftJavaReleaseId('1.20.6'),
       requirements,
       20,
     )
 
     expect(request.firstSeed).toBe('-25000')
-    expect(request.minecraftVersion).toBe('1.21')
+    expect(request.minecraftVersion).toBe('1.20.6')
     expect(request.resultLimit).toBe(20)
     expect(request.requirements).toEqual([
       {
@@ -37,6 +40,7 @@ describe('continuous seed search request', () => {
     expect(() =>
       createSeedSearchRequest(
         BigInt('9223372036854775808'),
+        defaultMinecraftVersion,
         requirements,
         20,
       ),
@@ -48,6 +52,7 @@ describe('continuous seed search request', () => {
   it('serializes biome types and semantic sizes for the engine', () => {
     const request = createSeedSearchRequest(
       BigInt(42),
+      defaultMinecraftVersion,
       [
         {
           kind: 'biome',
@@ -73,6 +78,7 @@ describe('continuous seed search request', () => {
   it('serializes ruined portal requirements for the engine', () => {
     const request = createSeedSearchRequest(
       BigInt(42),
+      defaultMinecraftVersion,
       [
         {
           kind: 'structure',
@@ -98,6 +104,7 @@ describe('continuous seed search request', () => {
   it('serializes woodland mansion requirements for the engine', () => {
     const request = createSeedSearchRequest(
       BigInt(42),
+      defaultMinecraftVersion,
       [
         {
           kind: 'structure',
@@ -123,6 +130,7 @@ describe('continuous seed search request', () => {
   it('serializes desert temple requirements for the engine', () => {
     const request = createSeedSearchRequest(
       BigInt(42),
+      defaultMinecraftVersion,
       [
         {
           kind: 'structure',

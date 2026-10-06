@@ -1,3 +1,4 @@
+import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
 import type { SearchRequirement } from '../domain/search-requirements'
 import type { SeedMapSettings } from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
@@ -6,6 +7,7 @@ import { SeedFinderPanel } from './SeedFinderPanel'
 import './SeedFinderWorkspace.css'
 
 interface SeedFinderWorkspaceProps {
+  minecraftVersion: MinecraftJavaReleaseId
   requirements: SearchRequirement[]
   onRequirementsChange: (
     requirements: SearchRequirement[],
@@ -17,6 +19,7 @@ interface SeedFinderWorkspaceProps {
 }
 
 export function SeedFinderWorkspace({
+  minecraftVersion,
   requirements,
   onRequirementsChange,
   seedMap,
@@ -41,6 +44,7 @@ export function SeedFinderWorkspace({
       />
 
       <SeedFinderPanel
+        minecraftVersion={minecraftVersion}
         requirements={requirements}
         resultLimit={resultLimit}
         onResultLimitChange={onResultLimitChange}

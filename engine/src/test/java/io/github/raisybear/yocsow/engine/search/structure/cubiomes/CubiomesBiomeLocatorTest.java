@@ -24,10 +24,12 @@ final class CubiomesBiomeLocatorTest {
 
     List<List<BlockPosition>> results =
         locator.findNearestCandidatesBatch(
-            new StructureSearchBatchRequest(-5, 2, MinecraftVersion.JAVA_1_21, requirements), 2);
+            new StructureSearchBatchRequest(
+                -5, 2, MinecraftVersion.fromIdentifier("1.20.6"), requirements),
+            2);
 
     assertEquals(StructureType.TAIGA, locator.structureType());
-    assertEquals(1, nativeLibrary.minecraftVersion);
+    assertEquals(3, nativeLibrary.minecraftVersion);
     assertEquals(-5, nativeLibrary.firstSeed);
     assertEquals(2, nativeLibrary.seedCount);
     assertEquals(

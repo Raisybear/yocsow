@@ -23,11 +23,13 @@ final class CubiomesStructureLocatorTest {
         new CubiomesStructureLocator(StructureType.RUINED_PORTAL, 2, nativeLibrary);
     StructureSearchRequest request =
         new StructureSearchRequest(
-            42, MinecraftVersion.JAVA_1_21, requirement("portal-1", -800, 1200, 640));
+            42,
+            MinecraftVersion.fromIdentifier("1.19.4"),
+            requirement("portal-1", -800, 1200, 640));
 
     assertEquals(nativeLibrary.positions, locator.findNearestCandidates(request, 2));
     assertEquals(StructureType.RUINED_PORTAL, locator.structureType());
-    assertEquals(1, nativeLibrary.minecraftVersion);
+    assertEquals(4, nativeLibrary.minecraftVersion);
     assertEquals(2, nativeLibrary.structure);
     assertEquals(42, nativeLibrary.seed);
     assertEquals(-800, nativeLibrary.centerX);

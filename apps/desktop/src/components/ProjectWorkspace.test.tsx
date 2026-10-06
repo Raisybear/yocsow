@@ -2,7 +2,12 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
+  requireMinecraftJavaReleaseId,
+} from '../domain/minecraft-version'
+import {
   openLocalProject,
+  PROJECT_FORMAT_VERSION,
   saveLocalProject,
   selectProjectSavePath,
 } from '../native/projects'
@@ -11,7 +16,7 @@ import { ProjectWorkspace } from './ProjectWorkspace'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 
 vi.mock('../native/projects', () => ({
-  PROJECT_FORMAT_VERSION: 5,
+  PROJECT_FORMAT_VERSION: 6,
   openLocalProject: vi.fn(),
   saveLocalProject: vi.fn(),
   selectProjectSavePath: vi.fn(),
@@ -88,8 +93,9 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Loaded world.yocsow',
         project: {
-          formatVersion: 5,
+          formatVersion: PROJECT_FORMAT_VERSION,
           name: 'Loaded world',
+          minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
           searchRequirements: [
             {
               kind: 'structure',
@@ -162,7 +168,8 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Map workspace.yocsow',
       expect.objectContaining({
-        formatVersion: 5,
+        formatVersion: PROJECT_FORMAT_VERSION,
+        minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
         seedMap: {
           visible: true,
           seed: renderedSeed,
@@ -199,8 +206,9 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Survival world.yocsow',
       {
-        formatVersion: 5,
+        formatVersion: PROJECT_FORMAT_VERSION,
         name: 'Survival world',
+        minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
         searchRequirements: [],
         seedMap: {
           visible: false,
@@ -265,8 +273,9 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Village search.yocsow',
       {
-        formatVersion: 5,
+        formatVersion: PROJECT_FORMAT_VERSION,
         name: 'Village search',
+        minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
         searchRequirements: [
           {
             kind: 'structure',
@@ -299,8 +308,9 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Existing.yocsow',
         project: {
-          formatVersion: 5,
+          formatVersion: PROJECT_FORMAT_VERSION,
           name: 'Existing',
+          minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
           searchRequirements: [],
           seedMap: {
             visible: false,
@@ -334,8 +344,9 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Existing.yocsow',
       {
-        formatVersion: 5,
+        formatVersion: PROJECT_FORMAT_VERSION,
         name: 'Existing updated',
+        minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
         searchRequirements: [],
         seedMap: {
           visible: false,
@@ -357,8 +368,9 @@ describe('ProjectWorkspace', () => {
       value: {
         path: '/projects/Original.yocsow',
         project: {
-          formatVersion: 5,
+          formatVersion: PROJECT_FORMAT_VERSION,
           name: 'Original',
+          minecraftVersion: requireMinecraftJavaReleaseId('1.18.2'),
           searchRequirements: [],
           seedMap: {
             visible: true,
@@ -390,8 +402,9 @@ describe('ProjectWorkspace', () => {
     expect(saveLocalProjectMock).toHaveBeenCalledWith(
       '/projects/Copy.yocsow',
       {
-        formatVersion: 5,
+        formatVersion: PROJECT_FORMAT_VERSION,
         name: 'Original',
+        minecraftVersion: '1.18.2',
         searchRequirements: [],
         seedMap: {
           visible: true,

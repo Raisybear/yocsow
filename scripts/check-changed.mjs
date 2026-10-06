@@ -78,6 +78,13 @@ function classifyFile(state, rawFilePath) {
     filePath === 'scripts/update-minecraft-version-catalog.mjs'
   ) {
     state.minecraftVersionCatalog = true
+    if (filePath === 'config/minecraft-java-releases.json') {
+      state.frontendSources.add('src/domain/minecraft-version.ts')
+      state.rustFilters.add('minecraft_version')
+      state.rustFilters.add('project_files')
+      state.native = true
+      state.javaModules.add('engine')
+    }
     return
   }
 

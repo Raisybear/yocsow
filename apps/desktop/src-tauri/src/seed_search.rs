@@ -1,4 +1,5 @@
 use crate::engine_process::EngineProcessError;
+use crate::minecraft_version::MinecraftJavaReleaseId;
 use serde::{Deserialize, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -108,7 +109,7 @@ pub struct SeedSearchRequirementInput {
 pub(crate) struct SeedSearchQuery {
     first_seed: i64,
     seed_count: u32,
-    minecraft_version: String,
+    minecraft_version: MinecraftJavaReleaseId,
     requirements: Vec<SeedSearchRequirement>,
     result_limit: u32,
 }
@@ -139,13 +140,8 @@ impl SeedSearchQuery {
             .checked_add(final_seed_offset)
             .ok_or_else(|| input_error("seed batch must not exceed the signed 64-bit range"))?;
 
-        let minecraft_version = minecraft_version.trim().to_owned();
-
-        if minecraft_version != "1.21" {
-            return Err(input_error(format!(
-                "unsupported Minecraft version: {minecraft_version}"
-            )));
-        }
+        let minecraft_version =
+            MinecraftJavaReleaseId::parse(minecraft_version).map_err(input_error)?;
 
         if requirements.is_empty() {
             return Err(input_error("requirements must not be empty"));
@@ -197,7 +193,7 @@ impl SeedSearchQuery {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ContinuousSeedSearchQuery {
     first_seed: i64,
-    minecraft_version: String,
+    minecraft_version: MinecraftJavaReleaseId,
     requirements: Vec<SeedSearchRequirement>,
     result_limit: u32,
 }
@@ -688,7 +684,7 @@ mod tests {
         let query = SeedSearchQuery::parse(
             "-9223372036854775808",
             1,
-            "1.21",
+            "1.20.6",
             vec![requirement(
                 "spawn-village",
                 "-9223372036854775808",
@@ -703,7 +699,7 @@ mod tests {
 
         assert_eq!(value["firstSeed"], json!(i64::MIN));
         assert_eq!(value["seedCount"], 1);
-        assert_eq!(value["minecraftVersion"], "1.21");
+        assert_eq!(value["minecraftVersion"], "1.20.6");
         assert_eq!(value["requirements"][0]["center"]["x"], json!(i64::MIN));
         assert_eq!(value["requirements"][0]["center"]["z"], json!(i64::MAX));
         assert_eq!(value["requirements"][0]["radiusBlocks"], 1000);
@@ -721,6 +717,20 @@ mod tests {
         .expect_err("overflowing batch should fail");
 
         assert_input_error(error, "seed batch must not exceed the signed 64-bit range");
+    }
+
+    #[test]
+    fn query_rejects_unknown_minecraft_releases() {
+        let error = SeedSearchQuery::parse(
+            "0",
+            1,
+            "1.21-fabric",
+            vec![requirement("spawn-village", "0", "0", "1000")],
+            1,
+        )
+        .expect_err("unknown releases should fail");
+
+        assert_input_error(error, "unknown Minecraft Java release: 1.21-fabric");
     }
 
     #[test]

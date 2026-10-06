@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { requireMinecraftJavaReleaseId } from '../domain/minecraft-version'
 import {
   createRandomSearchStart,
   searchSeedBatches,
@@ -28,6 +29,7 @@ const createRandomSearchStartMock = vi.mocked(
 )
 const searchSeedBatchesMock = vi.mocked(searchSeedBatches)
 const stopSeedSearchMock = vi.mocked(stopSeedSearch)
+const defaultMinecraftVersion = requireMinecraftJavaReleaseId('1.21')
 
 const requirements = [
   {
@@ -91,7 +93,12 @@ describe('SeedFinderPanel', () => {
 
     searchSeedBatchesMock.mockResolvedValue(matchingResult)
 
-    render(<SeedFinderPanel requirements={requirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={requireMinecraftJavaReleaseId('1.20.6')}
+        requirements={requirements}
+      />,
+    )
 
     const resultLimit = screen.getByLabelText('Result limit')
     await user.clear(resultLimit)
@@ -112,7 +119,7 @@ describe('SeedFinderPanel', () => {
     expect(searchSeedBatchesMock).toHaveBeenCalledWith(
       {
         firstSeed: '0',
-        minecraftVersion: '1.21',
+        minecraftVersion: '1.20.6',
         requirements: [
           {
             id: 'spawn-village',
@@ -159,7 +166,12 @@ describe('SeedFinderPanel', () => {
       },
     )
 
-    render(<SeedFinderPanel requirements={requirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={requirements}
+      />,
+    )
 
     await user.click(
       screen.getByRole('button', {
@@ -185,7 +197,12 @@ describe('SeedFinderPanel', () => {
       }),
     )
 
-    render(<SeedFinderPanel requirements={requirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={requirements}
+      />,
+    )
 
     await user.click(
       screen.getByRole('button', {
@@ -254,7 +271,12 @@ describe('SeedFinderPanel', () => {
       ],
     })
 
-    render(<SeedFinderPanel requirements={threeRequirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={threeRequirements}
+      />,
+    )
 
     const resultLimit = screen.getByLabelText('Result limit')
     await user.clear(resultLimit)
@@ -307,7 +329,12 @@ describe('SeedFinderPanel', () => {
       ],
     })
 
-    render(<SeedFinderPanel requirements={threeRequirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={threeRequirements}
+      />,
+    )
 
     await user.click(
       screen.getByRole('button', {
@@ -325,7 +352,12 @@ describe('SeedFinderPanel', () => {
   })
 
   it('requires at least one search requirement', () => {
-    render(<SeedFinderPanel requirements={[]} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={[]}
+      />,
+    )
 
     expect(
       screen.getByRole('button', {
@@ -344,7 +376,12 @@ describe('SeedFinderPanel', () => {
 
     searchSeedBatchesMock.mockResolvedValue(null)
 
-    render(<SeedFinderPanel requirements={requirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={requirements}
+      />,
+    )
 
     await user.click(
       screen.getByRole('button', {
@@ -366,7 +403,12 @@ describe('SeedFinderPanel', () => {
       new Error('Native locator unavailable'),
     )
 
-    render(<SeedFinderPanel requirements={requirements} />)
+    render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={requirements}
+      />,
+    )
 
     await user.click(
       screen.getByRole('button', {

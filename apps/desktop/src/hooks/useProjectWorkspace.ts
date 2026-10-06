@@ -1,4 +1,8 @@
 import { useState } from 'react'
+import {
+  DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
+  type MinecraftJavaReleaseId,
+} from '../domain/minecraft-version'
 import { createRandomSeed } from '../domain/seed-map'
 import {
   openLocalProject,
@@ -30,6 +34,7 @@ export interface ProjectWorkspaceController {
   saveProject: () => Promise<void>
   saveProjectAs: () => Promise<void>
   updateProjectName: (value: string) => void
+  updateMinecraftVersion: (value: MinecraftJavaReleaseId) => void
   updateSearchRequirements: (
     requirements: ProjectDocument['searchRequirements'],
   ) => void
@@ -40,6 +45,7 @@ function createProject(): ProjectDocument {
   return {
     formatVersion: PROJECT_FORMAT_VERSION,
     name: 'Untitled project',
+    minecraftVersion: DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
     searchRequirements: [],
     seedMap: {
       visible: false,
@@ -192,6 +198,15 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     markProjectChanged()
   }
 
+  function updateMinecraftVersion(value: MinecraftJavaReleaseId): void {
+    setProject((currentProject) => ({
+      ...currentProject,
+      minecraftVersion: value,
+    }))
+
+    markProjectChanged()
+  }
+
   function updateSearchRequirements(
     requirements: ProjectDocument['searchRequirements'],
   ): void {
@@ -223,6 +238,7 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
     saveProject,
     saveProjectAs,
     updateProjectName,
+    updateMinecraftVersion,
     updateSearchRequirements,
     updateSeedMap,
   }

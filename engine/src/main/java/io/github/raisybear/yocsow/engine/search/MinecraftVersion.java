@@ -1,25 +1,23 @@
 package io.github.raisybear.yocsow.engine.search;
 
-public enum MinecraftVersion {
-  JAVA_1_21("1.21");
+import java.util.Objects;
+import java.util.regex.Pattern;
 
-  private final String identifier;
+public record MinecraftVersion(String identifier) {
 
-  MinecraftVersion(String identifier) {
-    this.identifier = identifier;
-  }
+  private static final Pattern RELEASE_IDENTIFIER = Pattern.compile("\\d+(?:\\.\\d+)+");
 
-  public String identifier() {
-    return identifier;
+  public static final MinecraftVersion JAVA_1_21 = new MinecraftVersion("1.21");
+
+  public MinecraftVersion {
+    Objects.requireNonNull(identifier, "identifier");
+
+    if (!RELEASE_IDENTIFIER.matcher(identifier).matches()) {
+      throw new IllegalArgumentException("invalid Minecraft Java release: " + identifier);
+    }
   }
 
   public static MinecraftVersion fromIdentifier(String identifier) {
-    for (MinecraftVersion minecraftVersion : values()) {
-      if (minecraftVersion.identifier.equals(identifier)) {
-        return minecraftVersion;
-      }
-    }
-
-    throw new IllegalArgumentException("unsupported Minecraft version: " + identifier);
+    return new MinecraftVersion(identifier);
   }
 }

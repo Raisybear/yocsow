@@ -7,7 +7,18 @@ import {
   requireMinecraftJavaGenerationProfile,
   validateMinecraftJavaReleaseCatalog,
   validateMinecraftJavaGenerationProfileBindings,
+  cubiomesVersionHeaderPath,
 } from './minecraft-version-catalog.mjs'
+
+function expectedGenerationProfileCount(catalog) {
+  const sharedReleaseCount =
+    catalog.generationProfilePolicy.verifiedProfiles.reduce(
+      (count, profile) => count + profile.releaseIds.length - 1,
+      0,
+    )
+
+  return catalog.releaseIds.length - sharedReleaseCount
+}
 
 test('loads every Java full release through 26.3', () => {
   const catalog = loadMinecraftJavaReleaseCatalog()
@@ -82,7 +93,7 @@ test('assigns every release exactly one generation profile', () => {
     Object.keys(index.profileByReleaseId).length,
     catalog.releaseIds.length,
   )
-  assert.equal(index.profiles.length, catalog.releaseIds.length)
+  assert.equal(index.profiles.length, expectedGenerationProfileCount(catalog))
 
   for (const releaseId of catalog.releaseIds) {
     const profile = requireMinecraftJavaGenerationProfile(index, releaseId)
@@ -131,7 +142,7 @@ test('shares a profile only after releases are explicitly verified together', ()
     version: 'same-generation',
     supportLevel: 'supported',
   })
-  assert.equal(index.profiles.length, catalog.releaseIds.length - 1)
+  assert.equal(index.profiles.length, expectedGenerationProfileCount(catalog))
   assert.equal(
     requireMinecraftJavaGenerationProfile(index, '1.20.3').verificationStatus,
     'pending',
@@ -209,6 +220,7 @@ test('binds only explicit Cubiomes release profiles', () => {
   const expectedBindings = new Map([
     ['1.21.3', 'MC_1_21_3'],
     ['1.21.1', 'MC_1_21_1'],
+    ['1.21', 'MC_1_21_1'],
     ['1.20.6', 'MC_1_20_6'],
     ['1.19.4', 'MC_1_19_4'],
     ['1.19.2', 'MC_1_19_2'],
@@ -236,7 +248,7 @@ test('binds only explicit Cubiomes release profiles', () => {
 
   assert.equal(
     catalog.generationProfilePolicy.verifiedProfiles.length,
-    expectedBindings.size,
+    new Set(expectedBindings.values()).size,
   )
 
   for (const [releaseId, cubiomesVersion] of expectedBindings) {
@@ -252,7 +264,7 @@ test('binds only explicit Cubiomes release profiles', () => {
     'experimental',
   )
 
-  for (const pendingRelease of ['26.3', '1.21.4', '1.21', '1.20.5', '1.0.1']) {
+  for (const pendingRelease of ['26.3', '1.21.4', '1.20.5', '1.0.1']) {
     assert.equal(
       requireMinecraftJavaGenerationProfile(index, pendingRelease)
         .verificationStatus,
@@ -269,5 +281,19 @@ test('rejects Cubiomes bindings missing from the vendored header', () => {
   assert.throws(
     () => validateMinecraftJavaGenerationProfileBindings(catalog),
     /references missing Cubiomes version/,
+  )
+})
+
+test('rejects Cubiomes bindings missing from the native wrapper', () => {
+  const catalog = loadMinecraftJavaReleaseCatalog()
+
+  assert.throws(
+    () =>
+      validateMinecraftJavaGenerationProfileBindings(
+        catalog,
+        cubiomesVersionHeaderPath,
+        cubiomesVersionHeaderPath,
+      ),
+    /native wrapper does not expose Cubiomes version/,
   )
 })
