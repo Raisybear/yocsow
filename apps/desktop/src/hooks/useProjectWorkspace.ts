@@ -199,6 +199,10 @@ export function useProjectWorkspace(): ProjectWorkspaceController {
   }
 
   function updateMinecraftVersion(value: MinecraftJavaReleaseId): void {
+    if (project.minecraftVersion === value) {
+      return
+    }
+
     setProject((currentProject) => ({
       ...currentProject,
       minecraftVersion: value,

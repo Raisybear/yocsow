@@ -8,6 +8,9 @@ import './SeedFinderWorkspace.css'
 
 interface SeedFinderWorkspaceProps {
   minecraftVersion: MinecraftJavaReleaseId
+  onMinecraftVersionChange: (
+    minecraftVersion: MinecraftJavaReleaseId,
+  ) => void
   requirements: SearchRequirement[]
   onRequirementsChange: (
     requirements: SearchRequirement[],
@@ -20,6 +23,7 @@ interface SeedFinderWorkspaceProps {
 
 export function SeedFinderWorkspace({
   minecraftVersion,
+  onMinecraftVersionChange,
   requirements,
   onRequirementsChange,
   seedMap,
@@ -37,6 +41,8 @@ export function SeedFinderWorkspace({
       className="seed-finder-workspace"
     >
       <SearchRequirementsPanel
+        minecraftVersion={minecraftVersion}
+        onMinecraftVersionChange={onMinecraftVersionChange}
         requirements={requirements}
         onChange={onRequirementsChange}
         seedMap={seedMap}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
 import { SystemStatus } from './SystemStatus'
 import './SettingsWorkspace.css'
 
@@ -7,6 +8,7 @@ type SettingsTab = 'general' | 'search' | 'engine' | 'storage'
 interface SettingsWorkspaceProps {
   resultLimit: string
   onResultLimitChange: (resultLimit: string) => void
+  minecraftVersion: MinecraftJavaReleaseId
   projectName: string
   projectPath: string | null
   projectDirty: boolean
@@ -55,6 +57,7 @@ function projectState(
 export function SettingsWorkspace({
   resultLimit,
   onResultLimitChange,
+  minecraftVersion,
   projectName,
   projectPath,
   projectDirty,
@@ -202,7 +205,7 @@ export function SettingsWorkspace({
                 <dl>
                   <div>
                     <dt>Minecraft version</dt>
-                    <dd>1.21</dd>
+                    <dd>{minecraftVersion}</dd>
                   </div>
                   <div>
                     <dt>Seed range</dt>

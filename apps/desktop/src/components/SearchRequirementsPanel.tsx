@@ -1,4 +1,5 @@
 import { useState, type DragEvent } from 'react'
+import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
 import {
   BIOME_SIZE_OPTIONS,
   createBiomeRequirement,
@@ -16,6 +17,7 @@ import {
   type SeedMapSettings,
 } from '../domain/seed-map'
 import { ResizablePanelGroup } from './ResizablePanelGroup'
+import { MinecraftVersionSelector } from './MinecraftVersionSelector'
 import { SeedMapWorkspace } from './SeedMapWorkspace'
 import { writeDraggedFilterId } from './seed-map-drag'
 import './SearchRequirementsPanel.css'
@@ -23,6 +25,10 @@ import './SearchRequirementsPanel.css'
 type FilterCategory = 'structures' | 'biomes'
 
 interface SearchRequirementsPanelProps {
+  minecraftVersion: MinecraftJavaReleaseId
+  onMinecraftVersionChange: (
+    minecraftVersion: MinecraftJavaReleaseId,
+  ) => void
   requirements: SearchRequirement[]
   onChange: (requirements: SearchRequirement[]) => void
   seedMap: SeedMapSettings
@@ -172,6 +178,8 @@ function createRequirementId(): string {
 }
 
 export function SearchRequirementsPanel({
+  minecraftVersion,
+  onMinecraftVersionChange,
   requirements,
   onChange,
   seedMap,
@@ -285,6 +293,12 @@ export function SearchRequirementsPanel({
         </div>
 
         <div className="search-requirements-heading-actions">
+          <MinecraftVersionSelector
+            id="seed-finder-minecraft-version"
+            value={minecraftVersion}
+            onChange={onMinecraftVersionChange}
+          />
+
           <button
             className="seed-map-toggle"
             type="button"

@@ -168,6 +168,27 @@ describe('App', () => {
     expect(screen.getByLabelText('Result limit')).toHaveValue('35')
   })
 
+  it('connects the Minecraft version selector to the active project', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const selector = screen.getByRole('combobox', {
+      name: 'Minecraft version',
+    })
+
+    expect(selector).toHaveValue('1.21')
+
+    await user.click(selector)
+    await user.keyboard('1.20.6')
+    await user.click(
+      screen.getByRole('option', { name: 'Java 1.20.6' }),
+    )
+
+    expect(selector).toHaveValue('1.20.6')
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+  })
+
   it('keeps seed search results when navigating between views', async () => {
     const user = userEvent.setup()
 

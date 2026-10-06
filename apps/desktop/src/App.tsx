@@ -91,6 +91,9 @@ function App() {
             >
               <SeedFinderWorkspace
                 minecraftVersion={workspace.project.minecraftVersion}
+                onMinecraftVersionChange={
+                  workspace.updateMinecraftVersion
+                }
                 requirements={workspace.project.searchRequirements}
                 onRequirementsChange={
                   workspace.updateSearchRequirements
@@ -128,6 +131,7 @@ function App() {
               <SettingsWorkspace
                 resultLimit={defaultResultLimit}
                 onResultLimitChange={setDefaultResultLimit}
+                minecraftVersion={workspace.project.minecraftVersion}
                 projectName={workspace.project.name}
                 projectPath={workspace.projectPath}
                 projectDirty={workspace.projectDirty}
