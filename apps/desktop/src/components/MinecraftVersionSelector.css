@@ -94,9 +94,12 @@
   position: absolute;
   z-index: 20;
   top: calc(100% - 0.05rem);
-  right: 0;
+  right: auto;
   left: 0;
   display: grid;
+  width: max-content;
+  min-width: 100%;
+  max-width: calc(100vw - 2rem);
   max-height: 16rem;
   overflow-y: auto;
   border: 1px solid #465469;
@@ -143,8 +146,7 @@
 }
 
 .minecraft-version-option strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
   white-space: nowrap;
 }
 
@@ -155,6 +157,7 @@
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .minecraft-version-option-metadata--experimental,
