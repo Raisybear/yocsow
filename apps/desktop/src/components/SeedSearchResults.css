@@ -40,6 +40,11 @@
   color: #8fbdff;
 }
 
+.seed-finder-status--unavailable {
+  border-left: 3px solid #f2c56b;
+  color: #f2d28d;
+}
+
 .seed-results-panel {
   display: grid;
   min-width: 0;

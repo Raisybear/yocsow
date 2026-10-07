@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_MINECRAFT_JAVA_RELEASE_ID,
   getMinecraftJavaRelease,
+  getMinecraftJavaReleaseSearchSupport,
   isMinecraftJavaReleaseId,
   LATEST_MINECRAFT_JAVA_RELEASE_ID,
   MINECRAFT_JAVA_RELEASES,
@@ -71,5 +72,23 @@ describe('Minecraft Java release contract', () => {
       getMinecraftJavaRelease(requireMinecraftJavaReleaseId('1.0.0'))
         .serverOnly,
     ).toBe(false)
+  })
+
+  it('reports seed-search support independently from selection', () => {
+    expect(
+      getMinecraftJavaReleaseSearchSupport(
+        requireMinecraftJavaReleaseId('1.21'),
+      ),
+    ).toBe('supported')
+    expect(
+      getMinecraftJavaReleaseSearchSupport(
+        requireMinecraftJavaReleaseId('1.0.0'),
+      ),
+    ).toBe('experimental')
+    expect(
+      getMinecraftJavaReleaseSearchSupport(
+        requireMinecraftJavaReleaseId('1.20.5'),
+      ),
+    ).toBe('pending')
   })
 })

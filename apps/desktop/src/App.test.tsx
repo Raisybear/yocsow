@@ -168,6 +168,56 @@ describe('App', () => {
     expect(screen.getByLabelText('Result limit')).toHaveValue('35')
   })
 
+  it('connects the Minecraft version selector to the active project', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    const selector = screen.getByRole('combobox', {
+      name: 'Minecraft version',
+    })
+
+    expect(selector).toHaveValue('1.21')
+
+    await user.click(selector)
+    await user.keyboard('1.20.6')
+    await user.click(
+      screen.getByRole('option', { name: 'Java 1.20.6' }),
+    )
+
+    expect(selector).toHaveValue('1.20.6')
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+  })
+
+  it('keeps pending versions configurable while blocking their search', async () => {
+    const user = userEvent.setup()
+
+    render(<App />)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add Village filter' }),
+    )
+
+    const selector = screen.getByRole('combobox', {
+      name: 'Minecraft version',
+    })
+
+    await user.click(selector)
+    await user.keyboard('1.20.5')
+    await user.click(
+      screen.getByRole('option', { name: 'Java 1.20.5' }),
+    )
+
+    expect(selector).toHaveValue('1.20.5')
+    expect(
+      screen.getByRole('button', { name: 'Search seeds' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByText(/searching is not available yet/i),
+    ).toBeInTheDocument()
+    expect(searchSeedBatchesMock).not.toHaveBeenCalled()
+  })
+
   it('keeps seed search results when navigating between views', async () => {
     const user = userEvent.setup()
 

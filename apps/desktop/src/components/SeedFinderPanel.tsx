@@ -4,7 +4,10 @@ import {
   useRef,
   useState,
 } from 'react'
-import type { MinecraftJavaReleaseId } from '../domain/minecraft-version'
+import {
+  getMinecraftJavaReleaseSearchSupport,
+  type MinecraftJavaReleaseId,
+} from '../domain/minecraft-version'
 import type { SearchRequirement } from '../domain/search-requirements'
 import {
   createRandomSearchStart,
@@ -26,6 +29,7 @@ interface SeedFinderRequestState {
 
 interface SearchSession {
   fingerprint: string
+  abortController: AbortController
   discarded: boolean
   stopRequested: boolean
   progress: SeedSearchProgress
@@ -98,6 +102,13 @@ export function SeedFinderPanel({
     })
   const activeSession = useRef<SearchSession | null>(null)
   const resultLimit = controlledResultLimit ?? localResultLimit
+  const versionSupport = getMinecraftJavaReleaseSearchSupport(
+    minecraftVersion,
+  )
+  const unavailableMessage =
+    versionSupport === 'pending'
+      ? `Seed search support for Java ${minecraftVersion} is pending verification. You can configure and save this version, but searching is not available yet.`
+      : undefined
 
   function updateResultLimit(nextResultLimit: string): void {
     if (onResultLimitChange === undefined) {
@@ -125,6 +136,7 @@ export function SeedFinderPanel({
 
       if (session !== null) {
         session.discarded = true
+        session.abortController.abort()
         activeSession.current = null
         void stopSeedSearch().catch(() => undefined)
       }
@@ -135,6 +147,10 @@ export function SeedFinderPanel({
     event: FormEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault()
+
+    if (unavailableMessage !== undefined) {
+      return
+    }
 
     const submittedFingerprint = fingerprint
     let parsedResultLimit: number
@@ -154,6 +170,7 @@ export function SeedFinderPanel({
 
     const session: SearchSession = {
       fingerprint: submittedFingerprint,
+      abortController: new AbortController(),
       discarded: false,
       stopRequested: false,
       progress: {
@@ -198,6 +215,7 @@ export function SeedFinderPanel({
             })
           }
         },
+        { signal: session.abortController.signal },
       )
 
       if (session.discarded || activeSession.current !== session) {
@@ -325,7 +343,11 @@ export function SeedFinderPanel({
           <button
             className="seed-finder-submit"
             type="submit"
-            disabled={requirements.length === 0}
+            disabled={
+              requirements.length === 0 ||
+              unavailableMessage !== undefined
+            }
+            title={unavailableMessage}
           >
             Search seeds
           </button>
@@ -336,6 +358,7 @@ export function SeedFinderPanel({
         searchState={searchState}
         resultLimit={resultLimit}
         requirementCount={requirements.length}
+        unavailableMessage={unavailableMessage}
       />
     </section>
   )

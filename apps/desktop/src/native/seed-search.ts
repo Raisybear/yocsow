@@ -70,6 +70,25 @@ interface SeedSearchProgressEvent extends SeedSearchProgress {
   searchId: string
 }
 
+export interface SeedSearchExecutionOptions {
+  signal?: AbortSignal
+}
+
+let searchQueue: Promise<void> = Promise.resolve()
+
+async function acquireSearchSlot(): Promise<() => void> {
+  const previousSearch = searchQueue
+  let releaseSearch: () => void = () => undefined
+
+  searchQueue = new Promise((resolve) => {
+    releaseSearch = resolve
+  })
+
+  await previousSearch
+
+  return releaseSearch
+}
+
 function validateResultLimit(resultLimit: number): void {
   if (
     !Number.isInteger(resultLimit) ||
@@ -139,26 +158,34 @@ export function createSeedSearchRequest(
 export async function searchSeedBatches(
   request: SeedSearchRequest,
   onProgress: (progress: SeedSearchProgress) => void,
+  options: SeedSearchExecutionOptions = {},
 ): Promise<SeedSearchResult | null> {
   if (!isTauri()) {
     return null
   }
 
-  const searchId = globalThis.crypto.randomUUID()
-  const unlisten = await listen<SeedSearchProgressEvent>(
-    SEED_SEARCH_PROGRESS_EVENT,
-    (event) => {
-      if (event.payload.searchId === searchId) {
-        onProgress({
-          searchedSeedCount: event.payload.searchedSeedCount,
-          candidates: event.payload.candidates,
-          elapsedMilliseconds: event.payload.elapsedMilliseconds,
-        })
-      }
-    },
-  )
+  const releaseSearch = await acquireSearchSlot()
+  let unlisten: (() => void) | undefined
 
   try {
+    options.signal?.throwIfAborted()
+
+    const searchId = globalThis.crypto.randomUUID()
+    unlisten = await listen<SeedSearchProgressEvent>(
+      SEED_SEARCH_PROGRESS_EVENT,
+      (event) => {
+        if (event.payload.searchId === searchId) {
+          onProgress({
+            searchedSeedCount: event.payload.searchedSeedCount,
+            candidates: event.payload.candidates,
+            elapsedMilliseconds: event.payload.elapsedMilliseconds,
+          })
+        }
+      },
+    )
+
+    options.signal?.throwIfAborted()
+
     return await invoke<SeedSearchResult>('search_seed_batches', {
       searchId,
       firstSeed: request.firstSeed,
@@ -167,7 +194,8 @@ export async function searchSeedBatches(
       resultLimit: request.resultLimit,
     })
   } finally {
-    unlisten()
+    unlisten?.()
+    releaseSearch()
   }
 }
 

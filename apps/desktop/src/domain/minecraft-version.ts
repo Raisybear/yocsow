@@ -10,6 +10,10 @@ export type MinecraftGenerationSupportLevel =
   | 'supported'
   | 'experimental'
 
+export type MinecraftJavaReleaseSearchSupport =
+  | MinecraftGenerationSupportLevel
+  | 'pending'
+
 export interface MinecraftGenerationBackend {
   provider: string
   version: string
@@ -135,4 +139,14 @@ export function getMinecraftJavaRelease(
   }
 
   return release
+}
+
+export function getMinecraftJavaReleaseSearchSupport(
+  releaseId: MinecraftJavaReleaseId,
+): MinecraftJavaReleaseSearchSupport {
+  const profile = getMinecraftJavaRelease(releaseId).generationProfile
+
+  return profile.status === 'pending'
+    ? 'pending'
+    : profile.backend.supportLevel
 }

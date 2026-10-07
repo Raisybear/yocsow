@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { requireMinecraftJavaReleaseId } from '../domain/minecraft-version'
 import { getAppInfo } from '../native/app-info'
 import { getEngineStatus } from '../native/engine-status'
 import { SettingsWorkspace } from './SettingsWorkspace'
@@ -25,6 +26,7 @@ function SettingsHarness() {
       <SettingsWorkspace
         resultLimit={resultLimit}
         onResultLimitChange={setResultLimit}
+        minecraftVersion={requireMinecraftJavaReleaseId('1.18.2')}
         projectName="Mountain search"
         projectPath="/projects/mountain.yocsow"
         projectDirty={true}
@@ -70,6 +72,8 @@ describe('SettingsWorkspace', () => {
     await user.type(resultLimit, '35')
 
     expect(resultLimit).toHaveValue(35)
+    expect(screen.getByText('1.18.2')).toBeInTheDocument()
+    expect(screen.getByText('Supported')).toBeInTheDocument()
     expect(screen.getByTestId('result-limit-state')).toHaveTextContent(
       '35',
     )

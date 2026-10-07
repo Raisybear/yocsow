@@ -36,6 +36,8 @@ function WorkspaceHarness() {
       <ProjectWorkspace workspace={workspace} />
 
       <SearchRequirementsPanel
+        minecraftVersion={workspace.project.minecraftVersion}
+        onMinecraftVersionChange={workspace.updateMinecraftVersion}
         requirements={workspace.project.searchRequirements}
         onChange={workspace.updateSearchRequirements}
         seedMap={workspace.project.seedMap}
@@ -83,6 +85,60 @@ describe('ProjectWorkspace', () => {
     await user.type(projectName, 'Survival world')
 
     expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+  })
+
+  it('tracks and saves the selected Minecraft version', async () => {
+    const user = userEvent.setup()
+
+    selectProjectSavePathMock.mockResolvedValue({
+      status: 'selected',
+      value: '/projects/Versioned search.yocsow',
+    })
+
+    render(<WorkspaceHarness />)
+
+    const selector = screen.getByRole('combobox', {
+      name: 'Minecraft version',
+    })
+
+    await user.click(selector)
+    await user.keyboard('1.20.6')
+    await user.click(
+      screen.getByRole('option', { name: 'Java 1.20.6' }),
+    )
+
+    expect(selector).toHaveValue('1.20.6')
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(saveLocalProjectMock).toHaveBeenCalledWith(
+      '/projects/Versioned search.yocsow',
+      expect.objectContaining({
+        minecraftVersion: '1.20.6',
+      }),
+    )
+    expect(screen.getByText('All changes saved')).toBeInTheDocument()
+  })
+
+  it('does not mark the project changed when its version stays the same', async () => {
+    const user = userEvent.setup()
+
+    render(<WorkspaceHarness />)
+
+    const selector = screen.getByRole('combobox', {
+      name: 'Minecraft version',
+    })
+
+    await user.click(selector)
+    await user.keyboard('1.21')
+    await user.click(
+      screen.getByRole('option', { name: 'Java 1.21' }),
+    )
+
+    expect(selector).toHaveValue('1.21')
+    expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
+    expect(screen.getByText('New project')).toBeInTheDocument()
   })
 
   it('opens a local project', async () => {
@@ -392,6 +448,12 @@ describe('ProjectWorkspace', () => {
         name: 'Open',
       }),
     )
+
+    expect(
+      await screen.findByRole('combobox', {
+        name: 'Minecraft version',
+      }),
+    ).toHaveValue('1.18.2')
 
     await user.click(
       screen.getByRole('button', {

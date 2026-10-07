@@ -2,11 +2,19 @@ import { useState } from 'react'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import {
+  requireMinecraftJavaReleaseId,
+  type MinecraftJavaReleaseId,
+} from '../domain/minecraft-version'
 import type { SearchRequirement } from '../domain/search-requirements'
 import type { SeedMapSettings } from '../domain/seed-map'
 import { SearchRequirementsPanel } from './SearchRequirementsPanel'
 
 function SearchRequirementsHarness() {
+  const [minecraftVersion, setMinecraftVersion] =
+    useState<MinecraftJavaReleaseId>(
+      requireMinecraftJavaReleaseId('1.21'),
+    )
   const [requirements, setRequirements] = useState<
     SearchRequirement[]
   >([])
@@ -18,6 +26,8 @@ function SearchRequirementsHarness() {
   return (
     <>
       <SearchRequirementsPanel
+        minecraftVersion={minecraftVersion}
+        onMinecraftVersionChange={setMinecraftVersion}
         requirements={requirements}
         onChange={setRequirements}
         seedMap={seedMap}
@@ -26,6 +36,9 @@ function SearchRequirementsHarness() {
 
       <output data-testid="requirements-state">
         {JSON.stringify(requirements)}
+      </output>
+      <output data-testid="minecraft-version-state">
+        {minecraftVersion}
       </output>
       <output data-testid="seed-map-state">
         {JSON.stringify(seedMap)}
@@ -102,6 +115,30 @@ describe('SearchRequirementsPanel', () => {
     ).toBeInTheDocument()
 
     expect(renderedRequirements()).toEqual([])
+    expect(
+      screen.getByRole('combobox', { name: 'Minecraft version' }),
+    ).toHaveValue('1.21')
+  })
+
+  it('updates the selected Minecraft version', async () => {
+    const user = userEvent.setup()
+
+    render(<SearchRequirementsHarness />)
+
+    const selector = screen.getByRole('combobox', {
+      name: 'Minecraft version',
+    })
+
+    await user.click(selector)
+    await user.keyboard('1.20.6')
+    await user.click(
+      screen.getByRole('option', { name: 'Java 1.20.6' }),
+    )
+
+    expect(selector).toHaveValue('1.20.6')
+    expect(
+      screen.getByTestId('minecraft-version-state'),
+    ).toHaveTextContent('1.20.6')
   })
 
   it('toggles the seed map workspace', async () => {

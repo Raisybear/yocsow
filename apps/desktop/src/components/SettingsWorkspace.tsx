@@ -1,4 +1,9 @@
 import { useState } from 'react'
+import {
+  getMinecraftJavaReleaseSearchSupport,
+  type MinecraftJavaReleaseId,
+  type MinecraftJavaReleaseSearchSupport,
+} from '../domain/minecraft-version'
 import { SystemStatus } from './SystemStatus'
 import './SettingsWorkspace.css'
 
@@ -7,6 +12,7 @@ type SettingsTab = 'general' | 'search' | 'engine' | 'storage'
 interface SettingsWorkspaceProps {
   resultLimit: string
   onResultLimitChange: (resultLimit: string) => void
+  minecraftVersion: MinecraftJavaReleaseId
   projectName: string
   projectPath: string | null
   projectDirty: boolean
@@ -52,15 +58,31 @@ function projectState(
   return projectPath === null ? 'New project' : 'Saved locally'
 }
 
+function searchSupportLabel(
+  support: MinecraftJavaReleaseSearchSupport,
+): string {
+  switch (support) {
+    case 'supported':
+      return 'Supported'
+    case 'experimental':
+      return 'Experimental'
+    case 'pending':
+      return 'Pending verification'
+  }
+}
+
 export function SettingsWorkspace({
   resultLimit,
   onResultLimitChange,
+  minecraftVersion,
   projectName,
   projectPath,
   projectDirty,
 }: SettingsWorkspaceProps) {
   const [activeTab, setActiveTab] =
     useState<SettingsTab>('general')
+  const minecraftVersionSupport =
+    getMinecraftJavaReleaseSearchSupport(minecraftVersion)
 
   return (
     <section className="settings-workspace" aria-label="Application settings">
@@ -202,7 +224,11 @@ export function SettingsWorkspace({
                 <dl>
                   <div>
                     <dt>Minecraft version</dt>
-                    <dd>1.21</dd>
+                    <dd>{minecraftVersion}</dd>
+                  </div>
+                  <div>
+                    <dt>Version support</dt>
+                    <dd>{searchSupportLabel(minecraftVersionSupport)}</dd>
                   </div>
                   <div>
                     <dt>Seed range</dt>

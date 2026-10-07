@@ -25,6 +25,14 @@
   gap: 0.8rem;
 }
 
+.search-requirements-heading-actions .minecraft-version-selector {
+  width: 9.5rem;
+}
+
+.search-requirements-heading-actions .minecraft-version-selector > small {
+  display: none;
+}
+
 .seed-map-toggle {
   display: flex;
   align-items: center;
