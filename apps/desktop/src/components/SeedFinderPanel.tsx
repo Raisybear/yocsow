@@ -26,6 +26,7 @@ interface SeedFinderRequestState {
 
 interface SearchSession {
   fingerprint: string
+  abortController: AbortController
   discarded: boolean
   stopRequested: boolean
   progress: SeedSearchProgress
@@ -125,6 +126,7 @@ export function SeedFinderPanel({
 
       if (session !== null) {
         session.discarded = true
+        session.abortController.abort()
         activeSession.current = null
         void stopSeedSearch().catch(() => undefined)
       }
@@ -154,6 +156,7 @@ export function SeedFinderPanel({
 
     const session: SearchSession = {
       fingerprint: submittedFingerprint,
+      abortController: new AbortController(),
       discarded: false,
       stopRequested: false,
       progress: {
@@ -198,6 +201,7 @@ export function SeedFinderPanel({
             })
           }
         },
+        { signal: session.abortController.signal },
       )
 
       if (session.discarded || activeSession.current !== session) {

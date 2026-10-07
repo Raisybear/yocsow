@@ -134,6 +134,7 @@ describe('SeedFinderPanel', () => {
         resultLimit: 1,
       },
       expect.any(Function),
+      { signal: expect.any(AbortSignal) },
     )
 
     expect(screen.getByText('Seed 10004')).toBeInTheDocument()
@@ -349,6 +350,103 @@ describe('SeedFinderPanel', () => {
         .getAllByRole('heading', { level: 4 })
         .map((heading) => heading.textContent),
     ).toEqual(['Seed 2', 'Seed 1'])
+  })
+
+  it('clears completed results when the Minecraft version changes', async () => {
+    const user = userEvent.setup()
+
+    searchSeedBatchesMock.mockResolvedValue(matchingResult)
+
+    const { rerender } = render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={requirements}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Search seeds' }),
+    )
+    expect(await screen.findByText('Seed 10004')).toBeInTheDocument()
+
+    rerender(
+      <SeedFinderPanel
+        minecraftVersion={requireMinecraftJavaReleaseId('1.20.6')}
+        requirements={requirements}
+      />,
+    )
+
+    expect(screen.queryByText('Seed 10004')).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Ready to scan the full 64-bit seed space.'),
+    ).toBeInTheDocument()
+    expect(stopSeedSearchMock).not.toHaveBeenCalled()
+  })
+
+  it('retires an active version before accepting new results', async () => {
+    const user = userEvent.setup()
+    let finishOldSearch:
+      | ((result: SeedSearchResult) => void)
+      | undefined
+    const oldSearch = new Promise<SeedSearchResult>((resolve) => {
+      finishOldSearch = resolve
+    })
+
+    searchSeedBatchesMock
+      .mockReturnValueOnce(oldSearch)
+      .mockResolvedValueOnce({
+        ...matchingResult,
+        candidates: [
+          {
+            ...matchingResult.candidates[0],
+            seed: '20004',
+          },
+        ],
+      })
+
+    const { rerender } = render(
+      <SeedFinderPanel
+        minecraftVersion={defaultMinecraftVersion}
+        requirements={requirements}
+      />,
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'Search seeds' }),
+    )
+
+    await waitFor(() => {
+      expect(searchSeedBatchesMock).toHaveBeenCalledTimes(1)
+    })
+
+    rerender(
+      <SeedFinderPanel
+        minecraftVersion={requireMinecraftJavaReleaseId('1.20.6')}
+        requirements={requirements}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(stopSeedSearchMock).toHaveBeenCalledTimes(1)
+    })
+
+    const oldExecutionOptions = searchSeedBatchesMock.mock.calls[0]?.[2]
+    expect(oldExecutionOptions?.signal?.aborted).toBe(true)
+    expect(
+      screen.getByText('Ready to scan the full 64-bit seed space.'),
+    ).toBeInTheDocument()
+
+    finishOldSearch?.(matchingResult)
+
+    await user.click(
+      screen.getByRole('button', { name: 'Search seeds' }),
+    )
+
+    expect(await screen.findByText('Seed 20004')).toBeInTheDocument()
+    expect(screen.queryByText('Seed 10004')).not.toBeInTheDocument()
+    expect(searchSeedBatchesMock.mock.calls[1]?.[0]).toMatchObject({
+      minecraftVersion: '1.20.6',
+    })
   })
 
   it('requires at least one search requirement', () => {
