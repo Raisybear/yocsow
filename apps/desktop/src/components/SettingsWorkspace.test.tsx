@@ -73,6 +73,7 @@ describe('SettingsWorkspace', () => {
 
     expect(resultLimit).toHaveValue(35)
     expect(screen.getByText('1.18.2')).toBeInTheDocument()
+    expect(screen.getByText('Supported')).toBeInTheDocument()
     expect(screen.getByTestId('result-limit-state')).toHaveTextContent(
       '35',
     )

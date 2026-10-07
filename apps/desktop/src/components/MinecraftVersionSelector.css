@@ -5,12 +5,36 @@
   gap: 0.2rem;
 }
 
-.minecraft-version-selector > label {
+.minecraft-version-selector-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.minecraft-version-selector-heading > label {
   color: #7f8b9d;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.minecraft-version-support {
+  overflow: hidden;
+  color: #78dba9;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.minecraft-version-support--experimental,
+.minecraft-version-support--pending {
+  color: #f2c56b;
 }
 
 .minecraft-version-selector-control {
@@ -124,11 +148,16 @@
   white-space: nowrap;
 }
 
-.minecraft-version-option span {
+.minecraft-version-option-metadata {
   flex: none;
   color: #78dba9;
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.minecraft-version-option-metadata--experimental,
+.minecraft-version-option-metadata--pending {
+  color: #f2c56b;
 }

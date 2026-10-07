@@ -7,6 +7,8 @@ import {
   useState,
 } from 'react'
 import {
+  getMinecraftJavaRelease,
+  getMinecraftJavaReleaseSearchSupport,
   LATEST_MINECRAFT_JAVA_RELEASE_ID,
   MINECRAFT_JAVA_RELEASES,
   type MinecraftJavaRelease,
@@ -33,6 +35,38 @@ function matchingReleases(query: string): readonly MinecraftJavaRelease[] {
   )
 }
 
+function supportLabel(release: MinecraftJavaRelease): string {
+  switch (getMinecraftJavaReleaseSearchSupport(release.id)) {
+    case 'supported':
+      return 'Supported'
+    case 'experimental':
+      return 'Experimental'
+    case 'pending':
+      return 'Pending'
+  }
+}
+
+function supportDescription(release: MinecraftJavaRelease): string {
+  switch (getMinecraftJavaReleaseSearchSupport(release.id)) {
+    case 'supported':
+      return 'Seed search supported'
+    case 'experimental':
+      return 'Seed search support is experimental'
+    case 'pending':
+      return 'Seed search support is pending verification'
+  }
+}
+
+function releaseMetadata(release: MinecraftJavaRelease): string {
+  return [
+    release.id === LATEST_MINECRAFT_JAVA_RELEASE_ID ? 'Latest' : null,
+    release.serverOnly ? 'Server only' : null,
+    supportLabel(release),
+  ]
+    .filter((label) => label !== null)
+    .join(' · ')
+}
+
 export function MinecraftVersionSelector({
   value,
   onChange,
@@ -50,6 +84,8 @@ export function MinecraftVersionSelector({
   const [activeIndex, setActiveIndex] = useState(0)
   const releases = useMemo(() => matchingReleases(query), [query])
   const activeRelease = releases[activeIndex]
+  const selectedRelease = getMinecraftJavaRelease(value)
+  const selectedSupport = getMinecraftJavaReleaseSearchSupport(value)
 
   function close(): void {
     setOpen(false)
@@ -132,7 +168,14 @@ export function MinecraftVersionSelector({
       className="minecraft-version-selector"
       onBlur={handleBlur}
     >
-      <label htmlFor={inputId}>Minecraft version</label>
+      <div className="minecraft-version-selector-heading">
+        <label htmlFor={inputId}>Minecraft version</label>
+        <span
+          className={`minecraft-version-support minecraft-version-support--${selectedSupport}`}
+        >
+          {supportLabel(selectedRelease)}
+        </span>
+      </div>
 
       <div className="minecraft-version-selector-control">
         <input
@@ -193,7 +236,7 @@ export function MinecraftVersionSelector({
         </button>
       </div>
 
-      <small id={helpId}>Search Java Edition full releases.</small>
+      <small id={helpId}>{supportDescription(selectedRelease)}.</small>
 
       {open && (
         <div
@@ -220,6 +263,7 @@ export function MinecraftVersionSelector({
                     ? ', latest'
                     : ''
                 }${release.serverOnly ? ', server only' : ''}`}
+                aria-description={supportDescription(release)}
                 aria-selected={release.id === value}
                 tabIndex={-1}
                 key={release.id}
@@ -234,13 +278,10 @@ export function MinecraftVersionSelector({
                 }}
               >
                 <strong>Java {release.id}</strong>
-                <span>
-                  {release.id === LATEST_MINECRAFT_JAVA_RELEASE_ID &&
-                    'Latest'}
-                  {release.id === LATEST_MINECRAFT_JAVA_RELEASE_ID &&
-                    release.serverOnly &&
-                    ' · '}
-                  {release.serverOnly && 'Server only'}
+                <span
+                  className={`minecraft-version-option-metadata minecraft-version-option-metadata--${getMinecraftJavaReleaseSearchSupport(release.id)}`}
+                >
+                  {releaseMetadata(release)}
                 </span>
               </button>
             ))

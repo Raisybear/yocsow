@@ -32,6 +32,8 @@ describe('MinecraftVersionSelector', () => {
 
     expect(selector).toHaveValue('1.21')
     expect(selector).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByText('Supported')).toBeInTheDocument()
+    expect(screen.getByText('Seed search supported.')).toBeInTheDocument()
 
     await user.click(selector)
 
@@ -42,8 +44,13 @@ describe('MinecraftVersionSelector', () => {
     ).getAllByRole('option')
 
     expect(options).toHaveLength(MINECRAFT_JAVA_RELEASES.length)
-    expect(options[0]).toHaveTextContent('Java 26.3Latest')
-    expect(options.at(-1)).toHaveTextContent('Java 1.0.0')
+    expect(options[0]).toHaveTextContent('Java 26.3Latest · Pending')
+    expect(options[0]).toHaveAccessibleDescription(
+      'Seed search support is pending verification',
+    )
+    expect(options.at(-1)).toHaveTextContent(
+      'Java 1.0.0Experimental',
+    )
   })
 
   it('filters full releases and selects one without accepting free text', async () => {
@@ -116,6 +123,25 @@ describe('MinecraftVersionSelector', () => {
       screen.getByRole('option', {
         name: 'Java 1.0.1, server only',
       }),
+    ).toHaveAccessibleDescription(
+      'Seed search support is pending verification',
+    )
+  })
+
+  it('keeps pending versions selectable and explains their status', () => {
+    render(
+      <MinecraftVersionSelector
+        value={requireMinecraftJavaReleaseId('1.20.5')}
+        onChange={vi.fn()}
+      />,
+    )
+
+    expect(
+      screen.getByRole('combobox', { name: 'Minecraft version' }),
+    ).toHaveValue('1.20.5')
+    expect(screen.getByText('Pending')).toBeInTheDocument()
+    expect(
+      screen.getByText('Seed search support is pending verification.'),
     ).toBeInTheDocument()
   })
 

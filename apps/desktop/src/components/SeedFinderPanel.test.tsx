@@ -469,6 +469,34 @@ describe('SeedFinderPanel', () => {
     ).toBeInTheDocument()
   })
 
+  it('blocks searches for versions awaiting generation verification', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <SeedFinderPanel
+        minecraftVersion={requireMinecraftJavaReleaseId('1.20.5')}
+        requirements={requirements}
+      />,
+    )
+
+    const searchButton = screen.getByRole('button', {
+      name: 'Search seeds',
+    })
+
+    expect(searchButton).toBeDisabled()
+    expect(searchButton.getAttribute('title')).toContain(
+      'pending verification',
+    )
+    expect(
+      screen.getByText(
+        'Seed search support for Java 1.20.5 is pending verification. You can configure and save this version, but searching is not available yet.',
+      ),
+    ).toBeInTheDocument()
+
+    await user.click(searchButton)
+    expect(searchSeedBatchesMock).not.toHaveBeenCalled()
+  })
+
   it('explains that searches require Tauri', async () => {
     const user = userEvent.setup()
 

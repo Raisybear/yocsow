@@ -22,6 +22,7 @@ interface SeedSearchResultsProps {
   searchState: SeedFinderState
   resultLimit: string
   requirementCount: number
+  unavailableMessage?: string
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US')
@@ -69,6 +70,7 @@ export function SeedSearchResults({
   searchState,
   resultLimit,
   requirementCount,
+  unavailableMessage,
 }: SeedSearchResultsProps) {
   const visibleProgress =
     searchState.status === 'searching'
@@ -81,15 +83,27 @@ export function SeedSearchResults({
   return (
     <div className="seed-search-output">
       <div
-        className={`seed-finder-status seed-finder-status--${searchState.status}`}
+        className={`seed-finder-status seed-finder-status--${searchState.status}${
+          searchState.status === 'idle' &&
+          unavailableMessage !== undefined
+            ? ' seed-finder-status--unavailable'
+            : ''
+        }`}
         role="status"
         aria-live="polite"
       >
-        {searchState.status === 'idle' && requirementCount === 0 && (
+        {searchState.status === 'idle' &&
+          unavailableMessage !== undefined && <p>{unavailableMessage}</p>}
+
+        {searchState.status === 'idle' &&
+          unavailableMessage === undefined &&
+          requirementCount === 0 && (
           <p>Add at least one search requirement to start.</p>
         )}
 
-        {searchState.status === 'idle' && requirementCount > 0 && (
+        {searchState.status === 'idle' &&
+          unavailableMessage === undefined &&
+          requirementCount > 0 && (
           <p>Ready to scan the full 64-bit seed space.</p>
         )}
 
